@@ -17,64 +17,20 @@ interface ProgressLog {
   created_at: string
 }
 
-// 預設工序範本（包含棚架與鋁窗工程）
 const INITIAL_STAGES = [
-  {
-    category: '清拆工程',
-    enabled: true,
-    items: ['進場清拆', '清拆完成']
-  },
-  {
-    category: '棚架工程',
-    enabled: true,
-    items: ['搭棚', '拆棚']
-  },
-  {
-    category: '鋁窗工程',
-    enabled: true,
-    items: ['度尺', '拆舊窗', '換新窗', '封泥', '外部唧膠防水', '窗邊執修']
-  },
-  {
-    category: '電力工程',
-    enabled: true,
-    items: ['夾位', 'MARK位', '介坑', '放喉', '穿線', '裝制面']
-  },
-  {
-    category: '水喉工程',
-    enabled: true,
-    items: ['夾位', 'MARK位', '介坑', '放喉', '試水', '封泥']
-  },
-  {
-    category: '泥水工程',
-    enabled: true,
-    items: [
-      '間磚牆', '磚牆批盪', '廚房批盪', '浴室批盪',
-      '盪地台', '起基仔', '廚房鋪磚', '浴室鋪磚', '客廳及房間鋪磚'
-    ]
-  },
-  {
-    category: '防水工程',
-    enabled: true,
-    items: ['清潔表面', '第一層防水塗層', '第二層防水塗層', '第三層防水塗層', '第四層防水塗層']
-  },
-  {
-    category: '雲石工程',
-    enabled: true,
-    items: ['度尺', '裝雲石級咀']
-  },
-  {
-    category: '油漆工程',
-    enabled: true,
-    items: [
-      '剷底', '落批灰角', '批第一浸灰', '批第二浸灰', '批第三浸灰',
-      '磨平牆身灰', '油第一浸面油', '油第二浸面油', '油第三浸面油'
-    ]
-  }
+  { category: '清拆工程', enabled: true, items: ['進場清拆', '清拆完成'] },
+  { category: '棚架工程', enabled: true, items: ['搭棚', '拆棚'] },
+  { category: '鋁窗工程', enabled: true, items: ['度尺', '拆舊窗', '換新窗', '封泥', '外部唧膠防水', '窗邊執修'] },
+  { category: '電力工程', enabled: true, items: ['夾位', 'MARK位', '介坑', '放喉', '穿線', '裝制面'] },
+  { category: '水喉工程', enabled: true, items: ['夾位', 'MARK位', '介坑', '放喉', '試水', '封泥'] },
+  { category: '泥水工程', enabled: true, items: ['間磚牆', '磚牆批盪', '廚房批盪', '浴室批盪', '盪地台', '起基仔', '廚房鋪磚', '浴室鋪磚', '客廳及房間鋪磚'] },
+  { category: '防水工程', enabled: true, items: ['清潔表面', '第一層防水塗層', '第二層防水塗層', '第三層防水塗層', '第四層防水塗層'] },
+  { category: '雲石工程', enabled: true, items: ['度尺', '裝雲石級咀'] },
+  { category: '油漆工程', enabled: true, items: ['剷底', '落批灰角', '批第一浸灰', '批第二浸灰', '批第三浸灰', '磨平牆身灰', '油第一浸面油', '油第二浸面油', '油第三浸面油'] }
 ]
 
 export default function AdminPage() {
-  // Admin 登入驗證狀態
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const [adminUser, setAdminUser] = useState('')
   const [adminPass, setAdminPass] = useState('')
   const [loginError, setLoginError] = useState('')
@@ -89,21 +45,53 @@ export default function AdminPage() {
   const [message, setMessage] = useState('')
   const [logs, setLogs] = useState<ProgressLog[]>([])
 
-  // 工序狀態管理
   const [stages, setStages] = useState(INITIAL_STAGES)
   const [completedItems, setCompletedItems] = useState<Record<string, boolean>>({})
 
   const supabase = createClient()
 
-  // 登入驗證處理
-  const handleAdminLogin = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (adminUser === 'KENNYBBB' && adminPass === '0828') {
-      setIsAuthenticated(true)
-      setLoginError('')
-    } else {
-      setLoginError('帳號或密碼錯誤！')
+  // 進入頁面時向 Server 檢查 Session Cookie
+  useEffect(() => {
+    checkAuth()
+  }, [])
+
+  const checkAuth = async () => {
+    try {
+      const res = await fetch('/api/admin/check')
+      if (res.ok) {
+        setIsAuthenticated(true)
+      } else {
+        setIsAuthenticated(false)
+      }
+    } catch {
+      setIsAuthenticated(false)
     }
+  }
+
+  // 呼叫 Server API 進行登入
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoginError('')
+
+    const res = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: adminUser, password: adminPass })
+    })
+
+    if (res.ok) {
+      setIsAuthenticated(true)
+      setAdminUser('')
+      setAdminPass('')
+    } else {
+      const data = await res.json()
+      setLoginError(data.error || '登入失敗')
+    }
+  }
+
+  const handleLogout = async () => {
+    await fetch('/api/admin/logout', { method: 'POST' })
+    setIsAuthenticated(false)
   }
 
   useEffect(() => {
@@ -135,19 +123,16 @@ export default function AdminPage() {
     if (data) setLogs(data)
   }
 
-  // 切換大項啟用狀態
   const toggleStage = (category: string) => {
     setStages((prev) =>
       prev.map((s) => (s.category === category ? { ...s, enabled: !s.enabled } : s))
     )
   }
 
-  // 切換細項完成狀態
   const toggleItem = (itemKey: string) => {
     setCompletedItems((prev) => ({ ...prev, [itemKey]: !prev[itemKey] }))
   }
 
-  // 計算已啟用的總項目數與完成百分比
   const activeItems = stages
     .filter((s) => s.enabled)
     .flatMap((s) => s.items.map((i) => `${s.category}-${i}`))
@@ -156,7 +141,6 @@ export default function AdminPage() {
   const calculatedProgress =
     activeItems.length > 0 ? Math.round((completedCount / activeItems.length) * 100) : 0
 
-  // 處理相片選取與預覽
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return
     const selectedFiles = Array.from(e.target.files)
@@ -166,13 +150,11 @@ export default function AdminPage() {
     setPreviews((prev) => [...prev, ...newPreviews])
   }
 
-  // 移除預覽圖片
   const removeImage = (index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index))
     setPreviews((prev) => prev.filter((_, i) => i !== index))
   }
 
-  // 刪除舊日誌
   const handleDeleteLog = async (logId: string) => {
     if (!confirm('確定要刪除這筆施工紀錄嗎？')) return
     const { error } = await supabase.from('progress_logs').delete().eq('id', logId)
@@ -241,7 +223,10 @@ export default function AdminPage() {
     }
   }
 
-  // 1. 未登入：顯示管理員帳密登入頁面
+  if (isAuthenticated === null) {
+    return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">載入中...</div>
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -292,18 +277,16 @@ export default function AdminPage() {
     )
   }
 
-  // 2. 已登入：顯示你原本的完整版介面
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 p-4 md:p-8 pb-20">
       <div className="max-w-3xl mx-auto space-y-6">
-        {/* 標題卡片 */}
         <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-md flex justify-between items-center">
           <div>
             <h1 className="text-xl font-bold">工程管理員後台</h1>
-            <p className="text-xs text-slate-400 mt-1">地盤即時拍照與工序進度更新 (KENNYBBB)</p>
+            <p className="text-xs text-slate-400 mt-1">地盤即時拍照與工序進度更新</p>
           </div>
           <button
-            onClick={() => setIsAuthenticated(false)}
+            onClick={handleLogout}
             className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg font-medium border border-slate-700 transition"
           >
             登出
@@ -317,7 +300,6 @@ export default function AdminPage() {
         )}
 
         <form onSubmit={handleSubmit} className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
-          {/* 1. 選擇單位 */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
               選擇工程單位
@@ -335,7 +317,6 @@ export default function AdminPage() {
             </select>
           </div>
 
-          {/* 2. 工序進度 Checkbox 清單 */}
           <div className="space-y-4">
             <div className="flex justify-between items-center border-b pb-2">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -396,7 +377,6 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* 3. 標題與細節說明 */}
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
@@ -425,7 +405,6 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* 4. 相片選擇與縮圖預覽 */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
               現場施工照片 (可選多張)
@@ -443,7 +422,6 @@ export default function AdminPage() {
               />
             </label>
 
-            {/* 即時預覽區 */}
             {previews.length > 0 && (
               <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 gap-3">
                 {previews.map((src, index) => (
@@ -462,7 +440,6 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* 5. 大發布按鈕 */}
           <button
             type="submit"
             disabled={uploading}
@@ -472,7 +449,6 @@ export default function AdminPage() {
           </button>
         </form>
 
-        {/* 6. 歷史紀錄管理 */}
         <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
           <h3 className="text-base font-bold text-slate-900">歷史發布紀錄 (管理)</h3>
           {logs.length === 0 ? (
