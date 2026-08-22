@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 interface Project {
   id: string
   address: string
+  stages_state?: Record<string, boolean>
 }
 
 interface ProgressLog {
@@ -50,7 +51,6 @@ export default function AdminPage() {
 
   const supabase = createClient()
 
-  // 進入頁面時向 Server 檢查 Session Cookie
   useEffect(() => {
     checkAuth()
   }, [])
@@ -68,7 +68,6 @@ export default function AdminPage() {
     }
   }
 
-  // 呼叫 Server API 進行登入
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoginError('')
@@ -103,14 +102,32 @@ export default function AdminPage() {
   useEffect(() => {
     if (selectedProjectId && isAuthenticated) {
       fetchLogs(selectedProjectId)
+      loadProjectStages(selectedProjectId)
     }
   }, [selectedProjectId, isAuthenticated])
 
   const fetchProjects = async () => {
-    const { data } = await supabase.from('projects').select('id, address')
+    const { data } = await supabase.from('projects').select('id, address, stages_state')
     if (data && data.length > 0) {
       setProjects(data)
       setSelectedProjectId(data[0].id)
+      if (data[0].stages_state) {
+        setCompletedItems(data[0].stages_state)
+      }
+    }
+  }
+
+  const loadProjectStages = async (projectId: string) => {
+    const { data } = await supabase
+      .from('projects')
+      .select('stages_state')
+      .eq('id', projectId)
+      .single()
+
+    if (data && data.stages_state) {
+      setCompletedItems(data.stages_state)
+    } else {
+      setCompletedItems({})
     }
   }
 
@@ -205,12 +222,16 @@ export default function AdminPage() {
 
       if (logError) throw logError
 
+      // 更新進度百分比以及保存已勾選工序狀態
       await supabase
         .from('projects')
-        .update({ status: `施工中 (${calculatedProgress}%)` })
+        .update({
+          status: `施工中 (${calculatedProgress}%)`,
+          stages_state: completedItems
+        })
         .eq('id', selectedProjectId)
 
-      setMessage('成功新增施工進度！')
+      setMessage('成功新增施工進度，並已保存目前勾選狀態！')
       setTitle('')
       setDescription('')
       setFiles([])
@@ -445,7 +466,7 @@ export default function AdminPage() {
             disabled={uploading}
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl shadow-lg transition active:scale-[0.99] text-base"
           >
-            {uploading ? '正在發布更新...' : '🚀 發布施工日誌'}
+            {uploading ? '正在發布更新...' : '🚀 發布施工日誌 (自動儲存進度)'}
           </button>
         </form>
 
