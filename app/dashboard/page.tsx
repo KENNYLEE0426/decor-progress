@@ -31,9 +31,10 @@ export default function DashboardPage() {
       try {
         // 1. 從 localStorage 取得登入時存下來的 projectId
         const projectId = localStorage.getItem('client_project_id')
+        console.log('👉 [除錯 1] localStorage 中的 ID:', projectId)
 
         if (!projectId) {
-          // 若無 ID 代表未登入，踢回登入頁
+          console.warn('⚠️ 找不到 client_project_id，準備跳轉回登入頁')
           window.location.href = '/'
           return
         }
@@ -43,22 +44,24 @@ export default function DashboardPage() {
           .from('projects')
           .select('*')
           .eq('id', projectId)
-          .single()
+          .maybeSingle() // 使用 maybeSingle 避免找不到資料時直接拋出例外 crash
 
-        if (projectError) {
-          console.error('抓取單位資料失敗:', projectError)
-          return
-        }
+        console.log('👉 [除錯 2] Supabase 回傳的單位資料 projectData:', projectData)
+        console.log('👉 [除錯 3] Supabase 回傳的 Error projectError:', projectError)
 
         if (projectData) {
           setProject(projectData)
 
           // 3. 抓取該單位的施工進度日誌（按時間由新到舊排序）
-          const { data: logData } = await supabase
+          const { data: logData, error: logError } = await supabase
             .from('progress_logs')
             .select('*')
             .eq('project_id', projectData.id)
             .order('created_at', { ascending: false })
+
+          if (logError) {
+            console.error('抓取日誌失敗:', logError)
+          }
 
           if (logData) {
             setLogs(logData)
