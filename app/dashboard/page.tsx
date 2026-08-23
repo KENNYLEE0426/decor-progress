@@ -69,7 +69,7 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    let projectSubscription: any
+    let channel: any
 
     const fetchData = async () => {
       try {
@@ -96,18 +96,18 @@ export default function DashboardPage() {
         if (logData) setLogs(logData)
 
         // 載入材料收費期數與單據
-        fetchPhasesAndReceipts(projectId)
+        await fetchPhasesAndReceipts(projectId)
 
         // Realtime 監聽
-        projectSubscription = supabase
-          .channel(`project_realtime_${projectId}`)
+        channel = supabase
+          .channel(`project_dashboard_${projectId}`)
           .on('postgres_changes', { event: '*', schema: 'public', table: 'projects', filter: `id=eq.${projectId}` }, (payload) => {
             if (payload.new) setProject((prev) => (prev ? { ...prev, ...payload.new } : (payload.new as Project)))
           })
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'receipts', filter: `id=eq.${projectId}` }, () => {
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'receipts', filter: `project_id=eq.${projectId}` }, () => {
             fetchPhasesAndReceipts(projectId)
           })
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_phases', filter: `id=eq.${projectId}` }, () => {
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'payment_phases', filter: `project_id=eq.${projectId}` }, () => {
             fetchPhasesAndReceipts(projectId)
           })
           .subscribe()
@@ -122,11 +122,11 @@ export default function DashboardPage() {
     fetchData()
 
     return () => {
-      if (projectSubscription) supabase.removeChannel(projectSubscription)
+      if (channel) supabase.removeChannel(channel)
     }
   }, [])
 
-  const fetchPhasesAndReceipts = async (projectId: string) => {
+  const fetchPhasesAndReceipts = async (projectId: string, overridePhaseId?: string) => {
     const { data: phaseData } = await supabase
       .from('payment_phases')
       .select('*')
@@ -135,10 +135,16 @@ export default function DashboardPage() {
 
     if (phaseData && phaseData.length > 0) {
       setPhases(phaseData)
-      // 預設選擇最新的一期
-      const activePhase = phaseData.find(p => p.status === 'pending') || phaseData[0]
-      setSelectedPhaseId(activePhase.id)
-      loadReceiptsByPhase(projectId, activePhase.id)
+      
+      // 確定要載入哪一期的單據
+      let targetPhaseId = overridePhaseId || selectedPhaseId
+      if (!targetPhaseId || !phaseData.some(p => p.id === targetPhaseId)) {
+        const activePhase = phaseData.find(p => p.status === 'pending') || phaseData[0]
+        targetPhaseId = activePhase.id
+      }
+      
+      setSelectedPhaseId(targetPhaseId)
+      await loadReceiptsByPhase(projectId, targetPhaseId)
     }
   }
 
@@ -228,7 +234,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 🧾 🎯 材料收費區（可收起、計算金額、切換歷史期數） */}
+            {/* 🧾 材料收費區 */}
             <div className="pt-2 border-t border-slate-100">
               <button
                 type="button"
