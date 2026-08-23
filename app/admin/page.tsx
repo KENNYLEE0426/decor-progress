@@ -10,6 +10,23 @@ interface Project {
   stages_state?: Record<string, boolean>
 }
 
+interface PaymentPhase {
+  id: string
+  phase_number: number
+  status: string
+  paid_at: string | null
+}
+
+interface Receipt {
+  id: string
+  category: string
+  amount: number
+  description: string
+  photo_url: string
+  phase_id: string
+  created_at: string
+}
+
 const INITIAL_STAGES = [
   { category: '清拆工程', items: ['進場清拆', '清拆完成'] },
   { category: '棚架工程', items: ['搭棚', '拆棚'] },
@@ -28,12 +45,17 @@ export default function AdminPage() {
   const [stagesState, setStagesState] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState(false)
 
-  // 日誌發佈表單
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [progressPercent, setProgressPercent] = useState(0)
-  const [photos, setPhotos] = useState<File[]>([])
-  const [uploading, setUploading] = useState(false)
+  // 材料收費狀態
+  const [phases, setPhases] = useState<PaymentPhase[]>([])
+  const [currentPhase, setCurrentPhase] = useState<PaymentPhase | null>(null)
+  const [receipts, setReceipts] = useState<Receipt[]>([])
+
+  // 新增單據 Form
+  const [receiptCategory, setReceiptCategory] = useState(INITIAL_STAGES[0].category)
+  const [receiptAmount, setReceiptAmount] = useState('')
+  const [receiptDesc, setReceiptDesc] = useState('')
+  const [receiptPhoto, setReceiptPhoto] = useState<File | null>(null)
+  const [uploadingReceipt, setUploadingReceipt] = useState(false)
 
   const supabase = createClient()
 
@@ -42,78 +64,156 @@ export default function AdminPage() {
   }, [])
 
   const fetchProjects = async () => {
-    const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
+    const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
     if (data && data.length > 0) {
       setProjects(data)
       setSelectedProjectId(data[0].id)
-      
-      // 預設將未說明的類別設為「啟用 (true)」
-      const initialState = data[0].stages_state || {}
-      INITIAL_STAGES.forEach(stage => {
-        const catKey = `CATEGORY_ENABLED-${stage.category}`
-        if (initialState[catKey] === undefined) {
-          initialState[catKey] = true
-        }
-      })
-      setStagesState(initialState)
+      loadProjectData(data[0].id, data[0])
     }
   }
 
-  const handleSelectProject = (projectId: string) => {
-    setSelectedProjectId(projectId)
-    const proj = projects.find((p) => p.id === projectId)
+  const loadProjectData = async (projectId: string, projObj?: Project) => {
+    const proj = projObj || projects.find((p) => p.id === projectId)
     if (proj) {
       const state = proj.stages_state || {}
       INITIAL_STAGES.forEach(stage => {
         const catKey = `CATEGORY_ENABLED-${stage.category}`
-        if (state[catKey] === undefined) {
-          state[catKey] = true
-        }
+        if (state[catKey] === undefined) state[catKey] = true
       })
       setStagesState(state)
     }
+
+    // 載入收款期數
+    let { data: phaseData } = await supabase
+      .from('payment_phases')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('phase_number', { ascending: true })
+
+    if (!phaseData || phaseData.length === 0) {
+      // 首次建立 Phase 1
+      const { data: newPhase } = await supabase
+        .from('payment_phases')
+        .insert({ project_id: projectId, phase_number: 1, status: 'pending' })
+        .select()
+        .single()
+      if (newPhase) phaseData = [newPhase]
+    }
+
+    if (phaseData) {
+      setPhases(phaseData)
+      const active = phaseData.find(p => p.status === 'pending') || phaseData[phaseData.length - 1]
+      setCurrentPhase(active)
+      if (active) fetchReceipts(projectId, active.id)
+    }
   }
 
-  // 自動儲存到 Supabase
+  const fetchReceipts = async (projectId: string, phaseId: string) => {
+    const { data } = await supabase
+      .from('receipts')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('phase_id', phaseId)
+      .order('created_at', { ascending: false })
+
+    if (data) setReceipts(data)
+  }
+
+  const handleSelectProject = (projectId: string) => {
+    setSelectedProjectId(projectId)
+    loadProjectData(projectId)
+  }
+
   const saveStagesToSupabase = async (newState: Record<string, boolean>) => {
     if (!selectedProjectId) return
     setSaving(true)
-
-    const { error } = await supabase
-      .from('projects')
-      .update({ stages_state: newState })
-      .eq('id', selectedProjectId)
-
-    if (error) {
-      console.error('儲存失敗:', error)
-    } else {
-      setProjects((prev) =>
-        prev.map((p) => (p.id === selectedProjectId ? { ...p, stages_state: newState } : p))
-      )
-    }
+    await supabase.from('projects').update({ stages_state: newState }).eq('id', selectedProjectId)
+    setProjects((prev) => prev.map((p) => (p.id === selectedProjectId ? { ...p, stages_state: newState } : p)))
     setSaving(false)
   }
 
-  // 切換大類別啟用/禁用
   const toggleCategory = (category: string) => {
     const catKey = `CATEGORY_ENABLED-${category}`
-    const updated = {
-      ...stagesState,
-      [catKey]: !stagesState[catKey]
-    }
+    const updated = { ...stagesState, [catKey]: !stagesState[catKey] }
     setStagesState(updated)
     saveStagesToSupabase(updated)
   }
 
-  // 切換細項勾選
   const toggleStageItem = (category: string, item: string) => {
     const itemKey = `${category}-${item}`
-    const updated = {
-      ...stagesState,
-      [itemKey]: !stagesState[itemKey]
-    }
+    const updated = { ...stagesState, [itemKey]: !stagesState[itemKey] }
     setStagesState(updated)
     saveStagesToSupabase(updated)
+  }
+
+  // 上傳材料單據
+  const handleAddReceipt = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedProjectId || !currentPhase || !receiptAmount) return
+    setUploadingReceipt(true)
+
+    try {
+      let photoUrl = ''
+      if (receiptPhoto) {
+        const fileExt = receiptPhoto.name.split('.').pop()
+        const fileName = `receipt_${Date.now()}.${fileExt}`
+        const filePath = `${selectedProjectId}/${fileName}`
+
+        const { error: uploadError } = await supabase.storage.from('progress-photos').upload(filePath, receiptPhoto)
+        if (uploadError) throw uploadError
+
+        const { data: urlData } = supabase.storage.from('progress-photos').getPublicUrl(filePath)
+        photoUrl = urlData.publicUrl
+      }
+
+      const { data: newReceipt, error } = await supabase.from('receipts').insert({
+        project_id: selectedProjectId,
+        phase_id: currentPhase.id,
+        category: receiptCategory,
+        amount: parseFloat(receiptAmount),
+        description: receiptDesc,
+        photo_url: photoUrl
+      }).select().single()
+
+      if (error) throw error
+
+      if (newReceipt) setReceipts([newReceipt, ...receipts])
+      setReceiptAmount('')
+      setReceiptDesc('')
+      setReceiptPhoto(null)
+      alert('單據上傳成功！')
+    } catch (err: any) {
+      alert('上傳失敗: ' + err.message)
+    } finally {
+      setUploadingReceipt(false)
+    }
+  }
+
+  // 確認本期收款結清，開展新一期
+  const handleConfirmPayment = async () => {
+    if (!currentPhase || !selectedProjectId) return
+    if (!confirm(`確定已收到第 ${currentPhase.phase_number} 期款項？確認後將會保留舊資料並開展第 ${currentPhase.phase_number + 1} 期。`)) return
+
+    try {
+      // 1. 將當前 Phase 設為 paid
+      await supabase.from('payment_phases').update({
+        status: 'paid',
+        paid_at: new Date().toISOString()
+      }).eq('id', currentPhase.id)
+
+      // 2. 建立新 Phase
+      const nextPhaseNum = currentPhase.phase_number + 1
+      const { data: newPhase } = await supabase.from('payment_phases').insert({
+        project_id: selectedProjectId,
+        phase_number: nextPhaseNum,
+        status: 'pending'
+      }).select().single()
+
+      alert(`第 ${currentPhase.phase_number} 期已確認收款！已自動開啟第 ${nextPhaseNum} 期。`)
+      loadProjectData(selectedProjectId)
+    } catch (err: any) {
+      alert('確認收款失敗: ' + err.message)
+    }
   }
 
   return (
@@ -130,22 +230,118 @@ export default function AdminPage() {
             className="p-2 border rounded-lg flex-1 text-sm bg-slate-50"
           >
             {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.address}
-              </option>
+              <option key={p.id} value={p.id}>{p.address}</option>
             ))}
           </select>
           {saving && <span className="text-xs text-blue-500 font-medium animate-pulse">儲存中...</span>}
         </div>
 
+        {/* 💰 材料收費區 (ADMIN 上傳與結算) */}
+        <div className="bg-white p-6 rounded-xl shadow border border-slate-200 space-y-6">
+          <div className="flex justify-between items-center border-b pb-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-800">🧾 材料收費區管理</h2>
+              <p className="text-xs text-slate-500">當前階段：<span className="font-bold text-blue-600">第 {currentPhase?.phase_number || 1} 期收款</span></p>
+            </div>
+            {currentPhase && currentPhase.status === 'pending' && (
+              <button
+                onClick={handleConfirmPayment}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow transition"
+              >
+                ✅ 確認第 {currentPhase.phase_number} 期已收款（開展新一期）
+              </button>
+            )}
+          </div>
+
+          {/* 上傳新單據 Form */}
+          <form onSubmit={handleAddReceipt} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+            <h3 className="text-sm font-bold text-slate-700">新增材料單據（屬於第 {currentPhase?.phase_number || 1} 期）</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">所屬工程</label>
+                <select
+                  value={receiptCategory}
+                  onChange={(e) => setReceiptCategory(e.target.value)}
+                  className="w-full p-2 border rounded-lg text-xs bg-white"
+                >
+                  {INITIAL_STAGES.map((s) => (
+                    <option key={s.category} value={s.category}>{s.category}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">單據金額 (HKD)</label>
+                <input
+                  type="number"
+                  placeholder="例: 1500"
+                  value={receiptAmount}
+                  onChange={(e) => setReceiptAmount(e.target.value)}
+                  className="w-full p-2 border rounded-lg text-xs bg-white"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">單據相片</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setReceiptPhoto(e.target.files ? e.target.files[0] : null)}
+                  className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">單據描述 / 備註</label>
+              <input
+                type="text"
+                placeholder="例: 買客廳電線喉管及制面"
+                value={receiptDesc}
+                onChange={(e) => setReceiptDesc(e.target.value)}
+                className="w-full p-2 border rounded-lg text-xs bg-white"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={uploadingReceipt}
+              className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition disabled:opacity-50"
+            >
+              {uploadingReceipt ? '上傳中...' : '新增此單據'}
+            </button>
+          </form>
+
+          {/* 當前期數的單據列表 */}
+          <div className="space-y-2">
+            <h4 className="text-xs font-bold text-slate-500">本期已新增單據 ({receipts.length} 筆)</h4>
+            {receipts.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">本期暫無單據</p>
+            ) : (
+              <div className="space-y-2">
+                {receipts.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between p-3 bg-white border rounded-lg text-xs">
+                    <div className="flex items-center gap-3">
+                      {r.photo_url && (
+                        <img src={r.photo_url} alt="receipt" className="w-10 h-10 object-cover rounded border" />
+                      )}
+                      <div>
+                        <span className="font-bold text-blue-600 mr-2">[{r.category}]</span>
+                        <span className="font-semibold text-slate-800">{r.description || '無描述'}</span>
+                      </div>
+                    </div>
+                    <span className="font-extrabold text-slate-900 text-sm">HK$ {r.amount.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* 9 大工程管理清單 */}
         <div className="bg-white p-6 rounded-xl shadow border border-slate-200 space-y-6">
           <h2 className="text-lg font-bold text-slate-800 border-b pb-2">工程階段項目設定（勾選即自動同步客戶端）</h2>
-
           <div className="space-y-6">
             {INITIAL_STAGES.map((stage) => {
               const catKey = `CATEGORY_ENABLED-${stage.category}`
-              const isCategoryEnabled = stagesState[catKey] !== false // 預設為 true
+              const isCategoryEnabled = stagesState[catKey] !== false
 
               return (
                 <div
@@ -156,8 +352,6 @@ export default function AdminPage() {
                 >
                   <div className="flex justify-between items-center mb-3">
                     <span className="font-bold text-slate-800">{stage.category}</span>
-
-                    {/* 大項開關按鈕 */}
                     <button
                       type="button"
                       onClick={() => toggleCategory(stage.category)}
@@ -171,13 +365,11 @@ export default function AdminPage() {
                     </button>
                   </div>
 
-                  {/* 細項列表：大項禁用時灰色凍結 */}
                   {isCategoryEnabled && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {stage.items.map((item) => {
                         const itemKey = `${stage.category}-${item}`
                         const isChecked = !!stagesState[itemKey]
-
                         return (
                           <label
                             key={item}
