@@ -27,7 +27,7 @@ export default function DashboardPage() {
   const supabase = createClient()
 
   const handleLogout = () => {
-    localStorage.removeItem('client_project_id')
+    localStorage.clear()
     window.location.href = '/login'
   }
 
@@ -41,26 +41,29 @@ export default function DashboardPage() {
           return
         }
 
-        const { data: projectData } = await supabase
+        // 絕對限定：只拿目前 projectId 的資料
+        const { data: projectData, error: projectError } = await supabase
           .from('projects')
           .select('*')
           .eq('id', projectId)
           .maybeSingle()
 
-        if (projectData) {
-          setProject(projectData)
-
-          const { data: logData } = await supabase
-            .from('progress_logs')
-            .select('*')
-            .eq('project_id', projectData.id)
-            .order('created_at', { ascending: false })
-
-          if (logData) setLogs(logData)
-        } else {
-          localStorage.removeItem('client_project_id')
+        if (projectError || !projectData) {
+          localStorage.clear()
           window.location.href = '/login'
+          return
         }
+
+        setProject(projectData)
+
+        // 拿該單位的專屬施工日誌
+        const { data: logData } = await supabase
+          .from('progress_logs')
+          .select('*')
+          .eq('project_id', projectData.id)
+          .order('created_at', { ascending: false })
+
+        if (logData) setLogs(logData)
       } catch (error) {
         console.error('Error fetching data:', error)
       } finally {
@@ -113,7 +116,7 @@ export default function DashboardPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 mt-6 space-y-6">
-        {project ? (
+        {project && (
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
               <div>
@@ -135,7 +138,7 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-        ) : null}
+        )}
 
         <div className="space-y-4">
           <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">

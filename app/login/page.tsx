@@ -22,16 +22,21 @@ export default function LoginNewPage() {
 
       const data = await res.json()
 
-      if (!res.ok) {
-        throw new Error(data.error || '登入失敗')
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || '登入失敗，請確認電話與 PIN 碼')
       }
 
       if (data.projectId) {
-        localStorage.removeItem('client_project_id')
+        // 先完全清除舊快取
+        localStorage.clear()
+        
+        // 寫入當前登入帳號對應的唯一 ID
         localStorage.setItem('client_project_id', data.projectId)
+
+        // 強制硬重載跳轉，破除 Next.js 快取
         window.location.href = '/dashboard'
       } else {
-        throw new Error('登入失敗：未取得有效的工程 ID')
+        throw new Error('無法取得該單位的工程 ID')
       }
     } catch (err: any) {
       setErrorMsg(err.message)
