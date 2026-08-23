@@ -148,7 +148,6 @@ export default function AdminPage() {
     )
   }
 
-  // 🎯 點擊勾選：更新 Local，並立刻 Save 到 Supabase
   const toggleItem = async (itemKey: string) => {
     const nextCompleted = {
       ...completedItems,
@@ -173,7 +172,7 @@ export default function AdminPage() {
         .eq('id', selectedProjectId)
 
       if (error) {
-        alert(`自動儲存失敗！請檢查 Supabase 權限或欄位設定。\n錯誤訊息：${error.message}`)
+        alert(`自動儲存失敗！請檢查 Supabase 權限。\n錯誤訊息：${error.message}`)
       }
     }
   }
@@ -200,10 +199,18 @@ export default function AdminPage() {
     setPreviews((prev) => prev.filter((_, i) => i !== index))
   }
 
+  // 🎯 刪除歷史紀錄（附帶錯誤提示）
   const handleDeleteLog = async (logId: string) => {
     if (!confirm('確定要刪除這筆施工紀錄嗎？')) return
-    const { error } = await supabase.from('progress_logs').delete().eq('id', logId)
-    if (!error) {
+
+    const { error } = await supabase
+      .from('progress_logs')
+      .delete()
+      .eq('id', logId)
+
+    if (error) {
+      alert(`刪除失敗！請檢查 Supabase RLS 權限。\n錯誤訊息：${error.message}`)
+    } else {
       setMessage('已成功刪除紀錄！')
       fetchLogs(selectedProjectId)
     }
@@ -515,6 +522,7 @@ export default function AdminPage() {
                     </p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => handleDeleteLog(log.id)}
                     className="text-xs text-red-600 hover:bg-red-50 p-2 rounded-lg transition"
                   >
