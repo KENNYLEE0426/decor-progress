@@ -27,14 +27,8 @@ export default function LoginNewPage() {
       }
 
       if (data.projectId) {
-        // 1. 先清空舊有的 client_project_id 避免殘留
         localStorage.removeItem('client_project_id')
-        
-        // 2. 寫入新的 projectId
         localStorage.setItem('client_project_id', data.projectId)
-
-        // 3. 改用原生硬重新載入跳轉 (Hard Refresh Redirect)
-        // 這能徹底清除 Next.js 的 Router 快取，強迫 Dashboard 重新執行完整的 useEffect 抓最新資料
         window.location.href = '/dashboard'
       } else {
         throw new Error('登入失敗：未取得有效的工程 ID')
@@ -54,7 +48,7 @@ export default function LoginNewPage() {
             🏠
           </div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-            裝修仔Kenny客戶工程進度
+            裝修工程進度查詢
           </h1>
           <p className="text-xs text-slate-500">
             請輸入我們提供給您的電話號碼與 4 位數 PIN 碼
@@ -76,7 +70,7 @@ export default function LoginNewPage() {
               type="tel"
               required
               maxLength={8}
-              placeholder="請輸入我地提供比你既電話號碼"
+              placeholder="請輸入電話號碼"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className="w-full border border-slate-300 rounded-xl p-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
@@ -91,7 +85,7 @@ export default function LoginNewPage() {
               type="password"
               required
               maxLength={4}
-              placeholder="請輸入我地提供比你既4位PIN碼"
+              placeholder="請輸入4位PIN碼"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               className="w-full border border-slate-300 rounded-xl p-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition tracking-widest"
@@ -106,12 +100,6 @@ export default function LoginNewPage() {
             {loading ? '驗證身份中...' : '登入系統'}
           </button>
         </form>
-
-        <div className="text-center pt-2 border-t border-slate-100">
-          <p className="text-xs text-slate-400">
-            如有登入問題，請直接聯絡裝修仔Kenny團隊。
-          </p>
-        </div>
       </div>
     </div>
   )

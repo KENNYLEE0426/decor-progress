@@ -26,46 +26,40 @@ export default function DashboardPage() {
 
   const supabase = createClient()
 
+  const handleLogout = () => {
+    localStorage.removeItem('client_project_id')
+    window.location.href = '/login'
+  }
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. 從 localStorage 取得登入時存下來的 projectId
         const projectId = localStorage.getItem('client_project_id')
-        console.log('👉 [除錯 1] localStorage 中的 ID:', projectId)
 
         if (!projectId) {
-          console.warn('⚠️ 找不到 client_project_id，準備跳轉回登入頁')
-          window.location.href = '/'
+          window.location.href = '/login'
           return
         }
 
-        // 2. 根據 projectId 去 Supabase 查詢對應的單位資料
-        const { data: projectData, error: projectError } = await supabase
+        const { data: projectData } = await supabase
           .from('projects')
           .select('*')
           .eq('id', projectId)
-          .maybeSingle() // 使用 maybeSingle 避免找不到資料時直接拋出例外 crash
-
-        console.log('👉 [除錯 2] Supabase 回傳的單位資料 projectData:', projectData)
-        console.log('👉 [除錯 3] Supabase 回傳的 Error projectError:', projectError)
+          .maybeSingle()
 
         if (projectData) {
           setProject(projectData)
 
-          // 3. 抓取該單位的施工進度日誌（按時間由新到舊排序）
-          const { data: logData, error: logError } = await supabase
+          const { data: logData } = await supabase
             .from('progress_logs')
             .select('*')
             .eq('project_id', projectData.id)
             .order('created_at', { ascending: false })
 
-          if (logError) {
-            console.error('抓取日誌失敗:', logError)
-          }
-
-          if (logData) {
-            setLogs(logData)
-          }
+          if (logData) setLogs(logData)
+        } else {
+          localStorage.removeItem('client_project_id')
+          window.location.href = '/login'
         }
       } catch (error) {
         console.error('Error fetching data:', error)
@@ -77,7 +71,6 @@ export default function DashboardPage() {
     fetchData()
   }, [])
 
-  // 格式化日期時間
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleString('zh-HK', {
@@ -100,26 +93,26 @@ export default function DashboardPage() {
     )
   }
 
-  // 取得最新一筆紀錄的進度百分比（預設以最新紀錄為準）
   const currentProgress = logs.length > 0 ? logs[0].progress_percent : 0
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 pb-16">
-      {/* 頁頭 Header */}
       <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
           <div>
             <h1 className="text-xl font-bold tracking-wide">裝修工程進度查詢</h1>
             <p className="text-xs text-slate-400 mt-0.5">即時施工日誌與現場照片</p>
           </div>
-          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            ● 施工進行中
-          </span>
+          <button
+            onClick={handleLogout}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition"
+          >
+            登出頁面
+          </button>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 mt-6 space-y-6">
-        {/* 單位概覽與總進度卡片 */}
         {project ? (
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
@@ -133,7 +126,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 進度條 */}
             <div className="space-y-1.5">
               <div className="w-full bg-slate-100 h-3.5 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
                 <div
@@ -143,13 +135,8 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-        ) : (
-          <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-sm">
-            目前尚無綁定的工程單位資料。
-          </div>
-        )}
+        ) : null}
 
-        {/* 施工日誌動態列表 */}
         <div className="space-y-4">
           <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
             <span>施工動態紀錄</span>
@@ -166,7 +153,6 @@ export default function DashboardPage() {
                 key={log.id}
                 className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200/80 transition hover:shadow-md space-y-4"
               >
-                {/* 標題與時間 */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                   <h4 className="text-lg font-bold text-slate-900">{log.title}</h4>
                   <time className="text-xs text-slate-400 font-medium">
@@ -174,14 +160,12 @@ export default function DashboardPage() {
                   </time>
                 </div>
 
-                {/* 備註說明 */}
                 {log.description && (
                   <p className="text-slate-600 text-sm leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-100 whitespace-pre-line">
                     {log.description}
                   </p>
                 )}
 
-                {/* 相片網格 (Gallery) */}
                 {log.photo_urls && log.photo_urls.length > 0 && (
                   <div className="space-y-2">
                     <span className="text-xs font-semibold text-slate-400 tracking-wider">
@@ -200,11 +184,6 @@ export default function DashboardPage() {
                             className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                             loading="lazy"
                           />
-                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                            <span className="text-white text-xs bg-black/60 px-2.5 py-1 rounded-full backdrop-blur-sm">
-                              點擊放大 🔍
-                            </span>
-                          </div>
                         </div>
                       ))}
                     </div>
@@ -216,22 +195,18 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      {/* 相片放大 Lightbox / Modal */}
       {activeImage && (
         <div
           className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
           onClick={() => setActiveImage(null)}
         >
           <div className="relative max-w-4xl max-h-[90vh] w-full flex flex-col items-center justify-center">
-            {/* 關閉按鈕 */}
             <button
               onClick={() => setActiveImage(null)}
               className="absolute -top-12 right-0 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-sm transition"
             >
-              ✕ 關閉 (ESC)
+              ✕ 關閉
             </button>
-
-            {/* 大圖展示 */}
             <img
               src={activeImage}
               alt="施工放大圖"
