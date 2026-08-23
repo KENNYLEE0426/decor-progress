@@ -16,7 +16,7 @@ interface Project {
   id: string
   address: string
   status: string
-  stages_state?: Record<string, boolean>
+  stages_state?: Record<string, boolean | string>
 }
 
 // 與 Admin 後台定義相同的工程清單
@@ -156,7 +156,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 🎯 新增：細項工序進度展開區塊 */}
+            {/* 🎯 細項工序進度區塊（自動隱藏「不需做此項」） */}
             <div className="pt-2 border-t border-slate-100">
               <button
                 type="button"
@@ -174,11 +174,23 @@ export default function DashboardPage() {
               {showStageDetails && (
                 <div className="mt-4 space-y-4 max-h-[500px] overflow-y-auto pr-1">
                   {INITIAL_STAGES.map((stage) => {
+                    // 過濾掉被 Admin 設定為「不需做此項」(not_needed / skipped / false) 的小項
+                    const visibleItems = stage.items.filter((item) => {
+                      const state = stagesState[`${stage.category}-${item}`]
+                      // 只要 state 不等於 'not_needed'，且不等於 'disabled' / 'skipped'，就顯示
+                      return state !== 'not_needed' && state !== 'disabled' && state !== 'skipped' && state !== false
+                    })
+
+                    // 如果整大類所有工序都被隱藏，則不顯示該類別
+                    if (visibleItems.length === 0) return null
+
                     // 計算該階段完成了多少個小項
-                    const categoryCompletedCount = stage.items.filter(
-                      (item) => stagesState[`${stage.category}-${item}`]
-                    ).length
-                    const isFullyCompleted = categoryCompletedCount === stage.items.length
+                    const categoryCompletedCount = visibleItems.filter((item) => {
+                      const state = stagesState[`${stage.category}-${item}`]
+                      return state === true || state === 'completed'
+                    }).length
+
+                    const isFullyCompleted = categoryCompletedCount === visibleItems.length
 
                     return (
                       <div key={stage.category} className="border border-slate-200/80 rounded-xl p-4 bg-slate-50/50">
@@ -193,13 +205,15 @@ export default function DashboardPage() {
                               ? 'bg-blue-100 text-blue-700'
                               : 'bg-slate-200 text-slate-500'
                           }`}>
-                            {categoryCompletedCount} / {stage.items.length} 完成
+                            {categoryCompletedCount} / {visibleItems.length} 完成
                           </span>
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {stage.items.map((item) => {
-                            const isChecked = !!stagesState[`${stage.category}-${item}`]
+                          {visibleItems.map((item) => {
+                            const state = stagesState[`${stage.category}-${item}`]
+                            const isChecked = state === true || state === 'completed'
+
                             return (
                               <div
                                 key={item}
