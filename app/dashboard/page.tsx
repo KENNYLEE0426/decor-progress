@@ -29,17 +29,31 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 抓取工程單位資料
-        const { data: projectData } = await supabase
+        // 1. 從 localStorage 取得登入時存下來的 projectId
+        const projectId = localStorage.getItem('client_project_id')
+
+        if (!projectId) {
+          // 若無 ID 代表未登入，踢回登入頁
+          window.location.href = '/'
+          return
+        }
+
+        // 2. 根據 projectId 去 Supabase 查詢對應的單位資料
+        const { data: projectData, error: projectError } = await supabase
           .from('projects')
           .select('*')
-          .limit(1)
+          .eq('id', projectId)
           .single()
+
+        if (projectError) {
+          console.error('抓取單位資料失敗:', projectError)
+          return
+        }
 
         if (projectData) {
           setProject(projectData)
 
-          // 抓取該單位的施工進度日誌（按時間由新到舊排序）
+          // 3. 抓取該單位的施工進度日誌（按時間由新到舊排序）
           const { data: logData } = await supabase
             .from('progress_logs')
             .select('*')
