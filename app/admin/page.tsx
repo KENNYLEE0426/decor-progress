@@ -111,9 +111,7 @@ export default function AdminPage() {
     if (data && data.length > 0) {
       setProjects(data)
       setSelectedProjectId(data[0].id)
-      if (data[0].stages_state) {
-        setCompletedItems(data[0].stages_state)
-      }
+      setCompletedItems(data[0].stages_state || {})
     }
   }
 
@@ -146,8 +144,29 @@ export default function AdminPage() {
     )
   }
 
-  const toggleItem = (itemKey: string) => {
-    setCompletedItems((prev) => ({ ...prev, [itemKey]: !prev[itemKey] }))
+  // 🎯 自動比對並保存勾選狀態
+  const toggleItem = async (itemKey: string) => {
+    const nextCompleted = {
+      ...completedItems,
+      [itemKey]: !completedItems[itemKey]
+    }
+    setCompletedItems(nextCompleted)
+
+    if (selectedProjectId) {
+      const activeKeys = stages
+        .filter((s) => s.enabled)
+        .flatMap((s) => s.items.map((i) => `${s.category}-${i}`))
+      const cCount = activeKeys.filter((key) => nextCompleted[key]).length
+      const calcProgress = activeKeys.length > 0 ? Math.round((cCount / activeKeys.length) * 100) : 0
+
+      await supabase
+        .from('projects')
+        .update({
+          stages_state: nextCompleted,
+          status: `施工中 (${calcProgress}%)`
+        })
+        .eq('id', selectedProjectId)
+    }
   }
 
   const activeItems = stages
@@ -222,7 +241,6 @@ export default function AdminPage() {
 
       if (logError) throw logError
 
-      // 更新進度百分比以及保存已勾選工序狀態
       await supabase
         .from('projects')
         .update({
@@ -231,7 +249,7 @@ export default function AdminPage() {
         })
         .eq('id', selectedProjectId)
 
-      setMessage('成功新增施工進度，並已保存目前勾選狀態！')
+      setMessage('成功發布施工日誌，進度已更新！')
       setTitle('')
       setDescription('')
       setFiles([])
@@ -374,7 +392,10 @@ export default function AdminPage() {
                         return (
                           <label
                             key={item}
-                            onClick={() => toggleItem(itemKey)}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              toggleItem(itemKey)
+                            }}
                             className={`flex items-center gap-2 p-2.5 rounded-lg border text-sm cursor-pointer transition select-none ${
                               isChecked
                                 ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold'
@@ -384,8 +405,8 @@ export default function AdminPage() {
                             <input
                               type="checkbox"
                               checked={isChecked}
-                              onChange={() => {}}
-                              className="w-4 h-4 text-emerald-600 rounded"
+                              readOnly
+                              className="w-4 h-4 text-emerald-600 rounded pointer-events-none"
                             />
                             <span>{item}</span>
                           </label>
