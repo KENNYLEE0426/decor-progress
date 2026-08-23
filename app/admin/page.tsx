@@ -6,532 +6,203 @@ import { createClient } from '@/lib/supabase'
 interface Project {
   id: string
   address: string
+  status: string
   stages_state?: Record<string, boolean>
 }
 
-interface ProgressLog {
-  id: string
-  title: string
-  description: string
-  progress_percent: number
-  photo_urls: string[]
-  created_at: string
-}
-
 const INITIAL_STAGES = [
-  { category: '清拆工程', enabled: true, items: ['進場清拆', '清拆完成'] },
-  { category: '棚架工程', enabled: true, items: ['搭棚', '拆棚'] },
-  { category: '鋁窗工程', enabled: true, items: ['度尺', '拆舊窗', '換新窗', '封泥', '外部唧膠防水', '窗邊執修'] },
-  { category: '電力工程', enabled: true, items: ['夾位', 'MARK位', '介坑', '放喉', '穿線', '裝制面'] },
-  { category: '水喉工程', enabled: true, items: ['夾位', 'MARK位', '介坑', '放喉', '試水', '封泥'] },
-  { category: '泥水工程', enabled: true, items: ['間磚牆', '磚牆批盪', '廚房批盪', '浴室批盪', '盪地台', '起基仔', '廚房鋪磚', '浴室鋪磚', '客廳及房間鋪磚'] },
-  { category: '防水工程', enabled: true, items: ['清潔表面', '第一層防水塗層', '第二層防水塗層', '第三層防水塗層', '第四層防水塗層'] },
-  { category: '雲石工程', enabled: true, items: ['度尺', '裝雲石級咀'] },
-  { category: '油漆工程', enabled: true, items: ['剷底', '落批灰角', '批第一浸灰', '批第二浸灰', '批第三浸灰', '磨平牆身灰', '油第一浸面油', '油第二浸面油', '油第三浸面油'] }
+  { category: '清拆工程', items: ['進場清拆', '清拆完成'] },
+  { category: '棚架工程', items: ['搭棚', '拆棚'] },
+  { category: '鋁窗工程', items: ['度尺', '拆舊窗', '換新窗', '封泥', '外部唧膠防水', '窗邊執修'] },
+  { category: '電力工程', items: ['夾位', 'MARK位', '介坑', '放喉', '穿線', '裝制面'] },
+  { category: '水喉工程', items: ['夾位', 'MARK位', '介坑', '放喉', '試水', '封泥'] },
+  { category: '泥水工程', items: ['間磚牆', '磚牆批盪', '廚房批盪', '浴室批盪', '盪地台', '起基仔', '廚房鋪磚', '浴室鋪磚', '客廳及房間鋪磚'] },
+  { category: '防水工程', items: ['清潔表面', '第一層防水塗層', '第二層防水塗層', '第三層防水塗層', '第四層防水塗層'] },
+  { category: '雲石工程', items: ['度尺', '裝雲石級咀'] },
+  { category: '油漆工程', items: ['剷底', '落批灰角', '批第一浸灰', '批第二浸灰', '批第三浸灰', '磨平牆身灰', '油第一浸面油', '油第二浸面油', '油第三浸面油'] }
 ]
 
 export default function AdminPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
-  const [adminUser, setAdminUser] = useState('')
-  const [adminPass, setAdminPass] = useState('')
-  const [loginError, setLoginError] = useState('')
-
   const [projects, setProjects] = useState<Project[]>([])
-  const [selectedProjectId, setSelectedProjectId] = useState('')
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('')
+  const [stagesState, setStagesState] = useState<Record<string, boolean>>({})
+  const [saving, setSaving] = useState(false)
+
+  // 日誌發佈表單
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [files, setFiles] = useState<File[]>([])
-  const [previews, setPreviews] = useState<string[]>([])
+  const [progressPercent, setProgressPercent] = useState(0)
+  const [photos, setPhotos] = useState<File[]>([])
   const [uploading, setUploading] = useState(false)
-  const [message, setMessage] = useState('')
-  const [logs, setLogs] = useState<ProgressLog[]>([])
-
-  const [stages, setStages] = useState(INITIAL_STAGES)
-  const [completedItems, setCompletedItems] = useState<Record<string, boolean>>({})
 
   const supabase = createClient()
 
   useEffect(() => {
-    checkAuth()
+    fetchProjects()
   }, [])
 
-  const checkAuth = async () => {
-    try {
-      const res = await fetch('/api/admin/check')
-      if (res.ok) setIsAuthenticated(true)
-      else setIsAuthenticated(false)
-    } catch {
-      setIsAuthenticated(false)
-    }
-  }
-
-  const handleAdminLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoginError('')
-
-    const res = await fetch('/api/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: adminUser, password: adminPass })
-    })
-
-    if (res.ok) {
-      setIsAuthenticated(true)
-      setAdminUser('')
-      setAdminPass('')
-    } else {
-      const data = await res.json()
-      setLoginError(data.error || '登入失敗')
-    }
-  }
-
-  const handleLogout = async () => {
-    await fetch('/api/admin/logout', { method: 'POST' })
-    setIsAuthenticated(false)
-  }
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchProjects()
-    }
-  }, [isAuthenticated])
-
-  useEffect(() => {
-    if (selectedProjectId && isAuthenticated) {
-      fetchLogs(selectedProjectId)
-      loadProjectStages(selectedProjectId)
-    }
-  }, [selectedProjectId, isAuthenticated])
-
   const fetchProjects = async () => {
-    const { data } = await supabase.from('projects').select('id, address, stages_state')
+    const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
     if (data && data.length > 0) {
       setProjects(data)
-      if (!selectedProjectId) {
-        setSelectedProjectId(data[0].id)
-        setCompletedItems(data[0].stages_state || {})
-      }
+      setSelectedProjectId(data[0].id)
+      
+      // 預設將未說明的類別設為「啟用 (true)」
+      const initialState = data[0].stages_state || {}
+      INITIAL_STAGES.forEach(stage => {
+        const catKey = `CATEGORY_ENABLED-${stage.category}`
+        if (initialState[catKey] === undefined) {
+          initialState[catKey] = true
+        }
+      })
+      setStagesState(initialState)
     }
   }
 
-  const loadProjectStages = async (projectId: string) => {
-    const { data, error } = await supabase
-      .from('projects')
-      .select('stages_state')
-      .eq('id', projectId)
-      .single()
-
-    if (error) {
-      console.error('載入進度失敗:', error)
-      return
-    }
-
-    if (data && data.stages_state) {
-      setCompletedItems(data.stages_state)
-    } else {
-      setCompletedItems({})
+  const handleSelectProject = (projectId: string) => {
+    setSelectedProjectId(projectId)
+    const proj = projects.find((p) => p.id === projectId)
+    if (proj) {
+      const state = proj.stages_state || {}
+      INITIAL_STAGES.forEach(stage => {
+        const catKey = `CATEGORY_ENABLED-${stage.category}`
+        if (state[catKey] === undefined) {
+          state[catKey] = true
+        }
+      })
+      setStagesState(state)
     }
   }
 
-  const fetchLogs = async (projectId: string) => {
-    const { data } = await supabase
-      .from('progress_logs')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
-    if (data) setLogs(data)
-  }
-
-  const toggleStage = (category: string) => {
-    setStages((prev) =>
-      prev.map((s) => (s.category === category ? { ...s, enabled: !s.enabled } : s))
-    )
-  }
-
-  const toggleItem = async (itemKey: string) => {
-    const nextCompleted = {
-      ...completedItems,
-      [itemKey]: !completedItems[itemKey]
-    }
-    
-    setCompletedItems(nextCompleted)
-
-    if (selectedProjectId) {
-      const activeKeys = stages
-        .filter((s) => s.enabled)
-        .flatMap((s) => s.items.map((i) => `${s.category}-${i}`))
-      const cCount = activeKeys.filter((key) => nextCompleted[key]).length
-      const calcProgress = activeKeys.length > 0 ? Math.round((cCount / activeKeys.length) * 100) : 0
-
-      const { error } = await supabase
-        .from('projects')
-        .update({
-          stages_state: nextCompleted,
-          status: `施工中 (${calcProgress}%)`
-        })
-        .eq('id', selectedProjectId)
-
-      if (error) {
-        alert(`自動儲存失敗！請檢查 Supabase 權限。\n錯誤訊息：${error.message}`)
-      }
-    }
-  }
-
-  const activeItems = stages
-    .filter((s) => s.enabled)
-    .flatMap((s) => s.items.map((i) => `${s.category}-${i}`))
-
-  const completedCount = activeItems.filter((key) => completedItems[key]).length
-  const calculatedProgress =
-    activeItems.length > 0 ? Math.round((completedCount / activeItems.length) * 100) : 0
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return
-    const selectedFiles = Array.from(e.target.files)
-    setFiles((prev) => [...prev, ...selectedFiles])
-
-    const newPreviews = selectedFiles.map((file) => URL.createObjectURL(file))
-    setPreviews((prev) => [...prev, ...newPreviews])
-  }
-
-  const removeImage = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index))
-    setPreviews((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  // 🎯 刪除歷史紀錄（附帶錯誤提示）
-  const handleDeleteLog = async (logId: string) => {
-    if (!confirm('確定要刪除這筆施工紀錄嗎？')) return
+  // 自動儲存到 Supabase
+  const saveStagesToSupabase = async (newState: Record<string, boolean>) => {
+    if (!selectedProjectId) return
+    setSaving(true)
 
     const { error } = await supabase
-      .from('progress_logs')
-      .delete()
-      .eq('id', logId)
+      .from('projects')
+      .update({ stages_state: newState })
+      .eq('id', selectedProjectId)
 
     if (error) {
-      alert(`刪除失敗！請檢查 Supabase RLS 權限。\n錯誤訊息：${error.message}`)
+      console.error('儲存失敗:', error)
     } else {
-      setMessage('已成功刪除紀錄！')
-      fetchLogs(selectedProjectId)
+      setProjects((prev) =>
+        prev.map((p) => (p.id === selectedProjectId ? { ...p, stages_state: newState } : p))
+      )
     }
+    setSaving(false)
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedProjectId) {
-      alert('請先選擇工程單位')
-      return
+  // 切換大類別啟用/禁用
+  const toggleCategory = (category: string) => {
+    const catKey = `CATEGORY_ENABLED-${category}`
+    const updated = {
+      ...stagesState,
+      [catKey]: !stagesState[catKey]
     }
-
-    setUploading(true)
-    setMessage('正在上傳照片與更新進度...')
-
-    try {
-      const uploadedUrls: string[] = []
-
-      for (const file of files) {
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Date.now()}_${Math.random()}.${fileExt}`
-        const filePath = `progress/${fileName}`
-
-        const { error: uploadError } = await supabase.storage
-          .from('project-photos')
-          .upload(filePath, file)
-
-        if (uploadError) throw uploadError
-
-        const { data: urlData } = supabase.storage
-          .from('project-photos')
-          .getPublicUrl(filePath)
-
-        uploadedUrls.push(urlData.publicUrl)
-      }
-
-      const { error: logError } = await supabase.from('progress_logs').insert({
-        project_id: selectedProjectId,
-        title: title || `工序進度更新 (${calculatedProgress}%)`,
-        description,
-        progress_percent: calculatedProgress,
-        photo_urls: uploadedUrls,
-      })
-
-      if (logError) throw logError
-
-      await supabase
-        .from('projects')
-        .update({
-          status: `施工中 (${calculatedProgress}%)`,
-          stages_state: completedItems
-        })
-        .eq('id', selectedProjectId)
-
-      setMessage('成功發布施工日誌！')
-      setTitle('')
-      setDescription('')
-      setFiles([])
-      setPreviews([])
-      fetchLogs(selectedProjectId)
-    } catch (err: any) {
-      setMessage(`上傳失敗：${err.message || '未知錯誤'}`)
-    } finally {
-      setUploading(false)
-    }
+    setStagesState(updated)
+    saveStagesToSupabase(updated)
   }
 
-  if (isAuthenticated === null) {
-    return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">載入中...</div>
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <form onSubmit={handleAdminLogin} className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-slate-100">
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-black text-slate-800">工程管理員後台</h1>
-            <p className="text-xs text-slate-500 mt-1">請輸入管理員帳號與密碼</p>
-          </div>
-
-          {loginError && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm font-semibold text-center">
-              {loginError}
-            </div>
-          )}
-
-          <div className="mb-4">
-            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">帳號</label>
-            <input
-              type="text"
-              value={adminUser}
-              onChange={(e) => setAdminUser(e.target.value)}
-              className="w-full border border-slate-300 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 transition font-medium"
-              placeholder="請輸入帳號"
-              required
-            />
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">密碼</label>
-            <input
-              type="password"
-              value={adminPass}
-              onChange={(e) => setAdminPass(e.target.value)}
-              className="w-full border border-slate-300 p-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-600 transition font-medium"
-              placeholder="請輸入密碼"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl shadow-lg transition duration-200"
-          >
-            登入系統
-          </button>
-        </form>
-      </div>
-    )
+  // 切換細項勾選
+  const toggleStageItem = (category: string, item: string) => {
+    const itemKey = `${category}-${item}`
+    const updated = {
+      ...stagesState,
+      [itemKey]: !stagesState[itemKey]
+    }
+    setStagesState(updated)
+    saveStagesToSupabase(updated)
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 p-4 md:p-8 pb-20">
-      <div className="max-w-3xl mx-auto space-y-6">
-        <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-md flex justify-between items-center">
-          <div>
-            <h1 className="text-xl font-bold">工程管理員後台</h1>
-            <p className="text-xs text-slate-400 mt-1">地盤即時拍照與工序進度更新</p>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-lg font-medium border border-slate-700 transition"
+    <div className="min-h-screen bg-slate-100 p-6">
+      <div className="max-w-4xl mx-auto space-y-6">
+        <h1 className="text-2xl font-bold text-slate-800">Admin 工程管理後台</h1>
+
+        {/* 單位選擇器 */}
+        <div className="bg-white p-4 rounded-xl shadow border border-slate-200 flex items-center gap-4">
+          <label className="font-semibold text-sm">選擇工程單位：</label>
+          <select
+            value={selectedProjectId}
+            onChange={(e) => handleSelectProject(e.target.value)}
+            className="p-2 border rounded-lg flex-1 text-sm bg-slate-50"
           >
-            登出
-          </button>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.address}
+              </option>
+            ))}
+          </select>
+          {saving && <span className="text-xs text-blue-500 font-medium animate-pulse">儲存中...</span>}
         </div>
 
-        {message && (
-          <div className="p-4 bg-blue-50 border border-blue-200 text-blue-700 rounded-xl text-sm font-medium">
-            {message}
-          </div>
-        )}
+        {/* 9 大工程管理清單 */}
+        <div className="bg-white p-6 rounded-xl shadow border border-slate-200 space-y-6">
+          <h2 className="text-lg font-bold text-slate-800 border-b pb-2">工程階段項目設定（勾選即自動同步客戶端）</h2>
 
-        <form onSubmit={handleSubmit} className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-              選擇工程單位
-            </label>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => {
-                setSelectedProjectId(e.target.value)
-                setCompletedItems({})
-              }}
-              className="w-full border border-slate-300 rounded-xl p-3.5 text-base bg-slate-50 font-medium text-slate-900 focus:bg-white transition"
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.address}
-                </option>
-              ))}
-            </select>
-          </div>
+          <div className="space-y-6">
+            {INITIAL_STAGES.map((stage) => {
+              const catKey = `CATEGORY_ENABLED-${stage.category}`
+              const isCategoryEnabled = stagesState[catKey] !== false // 預設為 true
 
-          <div className="space-y-4">
-            <div className="flex justify-between items-center border-b pb-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                施工工序進度勾選
-              </label>
-              <span className="text-lg font-extrabold text-blue-600">
-                自動計算：{calculatedProgress}%
-              </span>
-            </div>
-
-            <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
-              {stages.map((stage) => (
-                <div key={stage.category} className="border border-slate-200 rounded-xl p-4 bg-slate-50/50">
+              return (
+                <div
+                  key={stage.category}
+                  className={`border rounded-xl p-4 transition ${
+                    isCategoryEnabled ? 'bg-slate-50 border-slate-200' : 'bg-slate-100/60 border-slate-200/50 opacity-60'
+                  }`}
+                >
                   <div className="flex justify-between items-center mb-3">
-                    <span className="font-bold text-slate-900">{stage.category}</span>
+                    <span className="font-bold text-slate-800">{stage.category}</span>
+
+                    {/* 大項開關按鈕 */}
                     <button
                       type="button"
-                      onClick={() => toggleStage(stage.category)}
-                      className={`text-xs px-3 py-1 rounded-full font-medium transition ${
-                        stage.enabled
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-slate-200 text-slate-500'
+                      onClick={() => toggleCategory(stage.category)}
+                      className={`px-3 py-1 rounded-full text-xs font-bold border transition ${
+                        isCategoryEnabled
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                          : 'bg-slate-200 text-slate-600 border-slate-300 hover:bg-slate-300'
                       }`}
                     >
-                      {stage.enabled ? '已啟用此工程' : '不需做此項'}
+                      {isCategoryEnabled ? '✓ 此大項需要做' : '✕ 本單位不需此工程'}
                     </button>
                   </div>
 
-                  {stage.enabled && (
+                  {/* 細項列表：大項禁用時灰色凍結 */}
+                  {isCategoryEnabled && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {stage.items.map((item) => {
                         const itemKey = `${stage.category}-${item}`
-                        const isChecked = !!completedItems[itemKey]
+                        const isChecked = !!stagesState[itemKey]
+
                         return (
-                          <div
+                          <label
                             key={item}
-                            onClick={() => toggleItem(itemKey)}
-                            className={`flex items-center gap-2 p-2.5 rounded-lg border text-sm cursor-pointer transition select-none ${
+                            className={`flex items-center gap-2 p-2 rounded-lg text-xs font-medium cursor-pointer border transition ${
                               isChecked
                                 ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold'
-                                : 'bg-white border-slate-200 text-slate-600'
+                                : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                             }`}
                           >
                             <input
                               type="checkbox"
                               checked={isChecked}
-                              onChange={() => {}}
-                              className="w-4 h-4 text-emerald-600 rounded pointer-events-none"
+                              onChange={() => toggleStageItem(stage.category, item)}
+                              className="rounded text-blue-600 focus:ring-blue-500"
                             />
                             <span>{item}</span>
-                          </div>
+                          </label>
                         )
                       })}
                     </div>
                   )}
                 </div>
-              ))}
-            </div>
+              )
+            })}
           </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                進度標題 (可不填，預設顯示進度 %)
-              </label>
-              <input
-                type="text"
-                placeholder="例如：棚架與鋁窗完成 / 泥水試水完成"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl p-3 text-sm text-slate-900"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">
-                施工細節備註 (業主可見)
-              </label>
-              <textarea
-                rows={3}
-                placeholder="輸入地盤備註或提醒業主注意事項..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full border border-slate-300 rounded-xl p-3 text-sm text-slate-900"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
-              現場施工照片 (可選多張)
-            </label>
-            <label className="flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl p-6 bg-slate-50 cursor-pointer hover:bg-slate-100 transition">
-              <span className="text-2xl mb-1">📷</span>
-              <span className="text-sm font-semibold text-slate-700">點擊此處拍照或選擇相片</span>
-              <span className="text-xs text-slate-400 mt-1">支援手機一次選擇多張</span>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleFileChange}
-                className="hidden"
-              />
-            </label>
-
-            {previews.length > 0 && (
-              <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 gap-3">
-                {previews.map((src, index) => (
-                  <div key={index} className="relative aspect-square rounded-xl overflow-hidden border bg-slate-100">
-                    <img src={src} alt="預覽" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(index)}
-                      className="absolute top-1 right-1 bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <button
-            type="submit"
-            disabled={uploading}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl shadow-lg transition active:scale-[0.99] text-base"
-          >
-            {uploading ? '正在發布更新...' : '🚀 發布施工日誌 (上傳照片)'}
-          </button>
-        </form>
-
-        <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <h3 className="text-base font-bold text-slate-900">歷史發布紀錄 (管理)</h3>
-          {logs.length === 0 ? (
-            <p className="text-xs text-slate-400">目前尚無歷史發布紀錄。</p>
-          ) : (
-            <div className="space-y-3">
-              {logs.map((log) => (
-                <div key={log.id} className="flex justify-between items-center p-3.5 bg-slate-50 rounded-xl border text-sm">
-                  <div>
-                    <p className="font-bold text-slate-800">{log.title}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      進度: {log.progress_percent}% | 相片: {log.photo_urls?.length || 0} 張
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteLog(log.id)}
-                    className="text-xs text-red-600 hover:bg-red-50 p-2 rounded-lg transition"
-                  >
-                    🗑️ 刪除
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
     </div>

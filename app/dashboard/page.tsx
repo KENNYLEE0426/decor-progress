@@ -16,10 +16,10 @@ interface Project {
   id: string
   address: string
   status: string
-  stages_state?: Record<string, boolean | string>
+  stages_state?: Record<string, boolean>
 }
 
-// 與 Admin 後台定義相同的工程清單
+// 9 大工程清單
 const INITIAL_STAGES = [
   { category: '清拆工程', items: ['進場清拆', '清拆完成'] },
   { category: '棚架工程', items: ['搭棚', '拆棚'] },
@@ -58,7 +58,6 @@ export default function DashboardPage() {
           return
         }
 
-        // 讀取包含 stages_state 的 Project 資料
         const { data: projectData, error: projectError } = await supabase
           .from('projects')
           .select('id, address, status, stages_state')
@@ -74,7 +73,6 @@ export default function DashboardPage() {
 
         setProject(projectData)
 
-        // 抓取該 Project ID 的施工日誌
         const { data: logData } = await supabase
           .from('progress_logs')
           .select('*')
@@ -83,7 +81,7 @@ export default function DashboardPage() {
 
         if (logData) setLogs(logData)
 
-        // ⚡ 訂閱 Realtime：當 Admin 修改 projects (stages_state) 時，客戶端自動無縫更新
+        // Supabase Realtime 即時監聽
         projectSubscription = supabase
           .channel(`project_realtime_${projectId}`)
           .on(
@@ -202,19 +200,18 @@ export default function DashboardPage() {
               {showStageDetails && (
                 <div className="mt-4 space-y-4 max-h-[500px] overflow-y-auto pr-1">
                   {INITIAL_STAGES.map((stage) => {
-                    const visibleItems = stage.items.filter((item) => {
-                      const state = stagesState[`${stage.category}-${item}`]
-                      return state !== 'not_needed' && state !== 'disabled' && state !== 'skipped' && state !== false
-                    })
+                    const catKey = `CATEGORY_ENABLED-${stage.category}`
+                    const isCategoryEnabled = stagesState[catKey] !== false
 
-                    if (visibleItems.length === 0) return null
+                    // 🎯 如果 Admin 將該大項關閉（不需此工程），客戶端完全隱藏該整個大項
+                    if (!isCategoryEnabled) return null
 
-                    const categoryCompletedCount = visibleItems.filter((item) => {
-                      const state = stagesState[`${stage.category}-${item}`]
-                      return state === true || state === 'completed'
+                    const categoryCompletedCount = stage.items.filter((item) => {
+                      const itemKey = `${stage.category}-${item}`
+                      return !!stagesState[itemKey]
                     }).length
 
-                    const isFullyCompleted = categoryCompletedCount === visibleItems.length
+                    const isFullyCompleted = categoryCompletedCount === stage.items.length
 
                     return (
                       <div key={stage.category} className="border border-slate-200/80 rounded-xl p-4 bg-slate-50/50">
@@ -229,14 +226,14 @@ export default function DashboardPage() {
                               ? 'bg-blue-100 text-blue-700'
                               : 'bg-slate-200 text-slate-500'
                           }`}>
-                            {categoryCompletedCount} / {visibleItems.length} 完成
+                            {categoryCompletedCount} / {stage.items.length} 完成
                           </span>
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {visibleItems.map((item) => {
-                            const state = stagesState[`${stage.category}-${item}`]
-                            const isChecked = state === true || state === 'completed'
+                          {stage.items.map((item) => {
+                            const itemKey = `${stage.category}-${item}`
+                            const isChecked = !!stagesState[itemKey]
 
                             return (
                               <div
