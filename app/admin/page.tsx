@@ -99,6 +99,7 @@ export default function AdminPage() {
     }
   }, [isAuthenticated])
 
+  // 當切換 selectedProjectId 時，嚴格重新載入該專案的進度
   useEffect(() => {
     if (selectedProjectId && isAuthenticated) {
       fetchLogs(selectedProjectId)
@@ -110,8 +111,11 @@ export default function AdminPage() {
     const { data } = await supabase.from('projects').select('id, address, stages_state')
     if (data && data.length > 0) {
       setProjects(data)
-      setSelectedProjectId(data[0].id)
-      setCompletedItems(data[0].stages_state || {})
+      // 若尚未選擇 Project，預設選取第一個
+      if (!selectedProjectId) {
+        setSelectedProjectId(data[0].id)
+        setCompletedItems(data[0].stages_state || {})
+      }
     }
   }
 
@@ -144,14 +148,17 @@ export default function AdminPage() {
     )
   }
 
-  // 🎯 自動比對並保存勾選狀態
+  // 🎯 點擊勾選時：立即更新 local state，並同步寫入 Supabase 資料庫
   const toggleItem = async (itemKey: string) => {
     const nextCompleted = {
       ...completedItems,
       [itemKey]: !completedItems[itemKey]
     }
+    
+    // 1. 先更新 UI State 避免卡頓
     setCompletedItems(nextCompleted)
 
+    // 2. 即時計算百分比並寫入 Supabase
     if (selectedProjectId) {
       const activeKeys = stages
         .filter((s) => s.enabled)
@@ -249,7 +256,7 @@ export default function AdminPage() {
         })
         .eq('id', selectedProjectId)
 
-      setMessage('成功發布施工日誌，進度已更新！')
+      setMessage('成功發布施工日誌！')
       setTitle('')
       setDescription('')
       setFiles([])
@@ -345,7 +352,10 @@ export default function AdminPage() {
             </label>
             <select
               value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
+              onChange={(e) => {
+                setSelectedProjectId(e.target.value)
+                setCompletedItems({}) // 切換時先清空，等待 useEffect 載入新單位的資料
+              }}
               className="w-full border border-slate-300 rounded-xl p-3.5 text-base bg-slate-50 font-medium text-slate-900 focus:bg-white transition"
             >
               {projects.map((p) => (
@@ -390,12 +400,9 @@ export default function AdminPage() {
                         const itemKey = `${stage.category}-${item}`
                         const isChecked = !!completedItems[itemKey]
                         return (
-                          <label
+                          <div
                             key={item}
-                            onClick={(e) => {
-                              e.preventDefault()
-                              toggleItem(itemKey)
-                            }}
+                            onClick={() => toggleItem(itemKey)}
                             className={`flex items-center gap-2 p-2.5 rounded-lg border text-sm cursor-pointer transition select-none ${
                               isChecked
                                 ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold'
@@ -405,11 +412,11 @@ export default function AdminPage() {
                             <input
                               type="checkbox"
                               checked={isChecked}
-                              readOnly
+                              onChange={() => {}} // 由父層 div onClick 統一處理
                               className="w-4 h-4 text-emerald-600 rounded pointer-events-none"
                             />
                             <span>{item}</span>
-                          </label>
+                          </div>
                         )
                       })}
                     </div>
@@ -487,7 +494,7 @@ export default function AdminPage() {
             disabled={uploading}
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl shadow-lg transition active:scale-[0.99] text-base"
           >
-            {uploading ? '正在發布更新...' : '🚀 發布施工日誌 (自動儲存進度)'}
+            {uploading ? '正在發布更新...' : '🚀 發布施工日誌 (上傳照片)'}
           </button>
         </form>
 
