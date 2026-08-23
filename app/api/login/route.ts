@@ -1,43 +1,36 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase'
 
 export async function POST(request: Request) {
   try {
     const { phone, pin } = await request.json()
-    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1'
 
     if (!phone || !pin) {
-      return NextResponse.json({ error: '請輸入手機號碼與 PIN 碼' }, { status: 400 })
+      return NextResponse.json({ error: '請輸入電話號碼與 PIN 碼' }, { status: 400 })
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const supabase = createClient()
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return NextResponse.json({ error: '系統設定錯誤：缺少 Supabase 設定檔' }, { status: 500 })
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseAnonKey)
-
-    // 驗證手機號碼與 PIN 碼 (精準比對)
-    const { data: project, error: projectError } = await supabase
+    // 🎯 關鍵修復：必須精準比對 client_phone 與 client_pin
+    const { data: project, error } = await supabase
       .from('projects')
-      .select('id, address')
+      .select('id, client_phone, client_pin')
       .eq('client_phone', phone.trim())
       .eq('client_pin', pin.trim())
       .maybeSingle()
 
-    if (projectError || !project) {
-      return NextResponse.json({ error: '電話號碼或 PIN 碼錯誤！' }, { status: 401 })
+    if (error || !project) {
+      return NextResponse.json({ error: '電話號碼或 PIN 碼不正確！' }, { status: 401 })
     }
 
-    // 驗證成功，明確回傳該帳號專屬的 ID
-    return NextResponse.json({ 
-      success: true, 
-      projectId: project.id,
-      address: project.address 
+    // 驗證成功，回傳對應單位的專屬 ID
+    return NextResponse.json({
+      success: true,
+      projectId: project.id
     })
-  } catch (err: any) {
-    return NextResponse.json({ error: '伺服器內部錯誤：' + err.message }, { status: 500 })
+
+  } catch (err) {
+    console.error('Login error:', err)
+    return NextResponse.json({ error: '伺服器發生錯誤' }, { status: 500 })
   }
 }
