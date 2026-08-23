@@ -1,15 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 
 export default function LoginNewPage() {
   const [phone, setPhone] = useState('')
   const [pin, setPin] = useState('')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
-
-  const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,8 +27,17 @@ export default function LoginNewPage() {
       }
 
       if (data.projectId) {
+        // 1. 先清空舊有的 client_project_id 避免殘留
+        localStorage.removeItem('client_project_id')
+        
+        // 2. 寫入新的 projectId
         localStorage.setItem('client_project_id', data.projectId)
-        router.push('/dashboard')
+
+        // 3. 改用原生硬重新載入跳轉 (Hard Refresh Redirect)
+        // 這能徹底清除 Next.js 的 Router 快取，強迫 Dashboard 重新執行完整的 useEffect 抓最新資料
+        window.location.href = '/dashboard'
+      } else {
+        throw new Error('登入失敗：未取得有效的工程 ID')
       }
     } catch (err: any) {
       setErrorMsg(err.message)
