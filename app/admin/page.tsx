@@ -58,11 +58,8 @@ export default function AdminPage() {
   const checkAuth = async () => {
     try {
       const res = await fetch('/api/admin/check')
-      if (res.ok) {
-        setIsAuthenticated(true)
-      } else {
-        setIsAuthenticated(false)
-      }
+      if (res.ok) setIsAuthenticated(true)
+      else setIsAuthenticated(false)
     } catch {
       setIsAuthenticated(false)
     }
@@ -99,7 +96,6 @@ export default function AdminPage() {
     }
   }, [isAuthenticated])
 
-  // 當切換 selectedProjectId 時，嚴格重新載入該專案的進度
   useEffect(() => {
     if (selectedProjectId && isAuthenticated) {
       fetchLogs(selectedProjectId)
@@ -111,7 +107,6 @@ export default function AdminPage() {
     const { data } = await supabase.from('projects').select('id, address, stages_state')
     if (data && data.length > 0) {
       setProjects(data)
-      // 若尚未選擇 Project，預設選取第一個
       if (!selectedProjectId) {
         setSelectedProjectId(data[0].id)
         setCompletedItems(data[0].stages_state || {})
@@ -120,11 +115,16 @@ export default function AdminPage() {
   }
 
   const loadProjectStages = async (projectId: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('projects')
       .select('stages_state')
       .eq('id', projectId)
       .single()
+
+    if (error) {
+      console.error('載入進度失敗:', error)
+      return
+    }
 
     if (data && data.stages_state) {
       setCompletedItems(data.stages_state)
@@ -148,17 +148,15 @@ export default function AdminPage() {
     )
   }
 
-  // 🎯 點擊勾選時：立即更新 local state，並同步寫入 Supabase 資料庫
+  // 🎯 點擊勾選：更新 Local，並立刻 Save 到 Supabase
   const toggleItem = async (itemKey: string) => {
     const nextCompleted = {
       ...completedItems,
       [itemKey]: !completedItems[itemKey]
     }
     
-    // 1. 先更新 UI State 避免卡頓
     setCompletedItems(nextCompleted)
 
-    // 2. 即時計算百分比並寫入 Supabase
     if (selectedProjectId) {
       const activeKeys = stages
         .filter((s) => s.enabled)
@@ -166,13 +164,17 @@ export default function AdminPage() {
       const cCount = activeKeys.filter((key) => nextCompleted[key]).length
       const calcProgress = activeKeys.length > 0 ? Math.round((cCount / activeKeys.length) * 100) : 0
 
-      await supabase
+      const { error } = await supabase
         .from('projects')
         .update({
           stages_state: nextCompleted,
           status: `施工中 (${calcProgress}%)`
         })
         .eq('id', selectedProjectId)
+
+      if (error) {
+        alert(`自動儲存失敗！請檢查 Supabase 權限或欄位設定。\n錯誤訊息：${error.message}`)
+      }
     }
   }
 
@@ -354,7 +356,7 @@ export default function AdminPage() {
               value={selectedProjectId}
               onChange={(e) => {
                 setSelectedProjectId(e.target.value)
-                setCompletedItems({}) // 切換時先清空，等待 useEffect 載入新單位的資料
+                setCompletedItems({})
               }}
               className="w-full border border-slate-300 rounded-xl p-3.5 text-base bg-slate-50 font-medium text-slate-900 focus:bg-white transition"
             >
@@ -412,7 +414,7 @@ export default function AdminPage() {
                             <input
                               type="checkbox"
                               checked={isChecked}
-                              onChange={() => {}} // 由父層 div onClick 統一處理
+                              onChange={() => {}}
                               className="w-4 h-4 text-emerald-600 rounded pointer-events-none"
                             />
                             <span>{item}</span>
