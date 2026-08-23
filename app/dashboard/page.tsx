@@ -16,13 +16,28 @@ interface Project {
   id: string
   address: string
   status: string
+  stages_state?: Record<string, boolean>
 }
+
+// 與 Admin 後台定義相同的工程清單
+const INITIAL_STAGES = [
+  { category: '清拆工程', items: ['進場清拆', '清拆完成'] },
+  { category: '棚架工程', items: ['搭棚', '拆棚'] },
+  { category: '鋁窗工程', items: ['度尺', '拆舊窗', '換新窗', '封泥', '外部唧膠防水', '窗邊執修'] },
+  { category: '電力工程', items: ['夾位', 'MARK位', '介坑', '放喉', '穿線', '裝制面'] },
+  { category: '水喉工程', items: ['夾位', 'MARK位', '介坑', '放喉', '試水', '封泥'] },
+  { category: '泥水工程', items: ['間磚牆', '磚牆批盪', '廚房批盪', '浴室批盪', '盪地台', '起基仔', '廚房鋪磚', '浴室鋪磚', '客廳及房間鋪磚'] },
+  { category: '防水工程', items: ['清潔表面', '第一層防水塗層', '第二層防水塗層', '第三層防水塗層', '第四層防水塗層'] },
+  { category: '雲石工程', items: ['度尺', '裝雲石級咀'] },
+  { category: '油漆工程', items: ['剷底', '落批灰角', '批第一浸灰', '批第二浸灰', '批第三浸灰', '磨平牆身灰', '油第一浸面油', '油第二浸面油', '油第三浸面油'] }
+]
 
 export default function DashboardPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [logs, setLogs] = useState<ProgressLog[]>([])
   const [loading, setLoading] = useState(true)
   const [activeImage, setActiveImage] = useState<string | null>(null)
+  const [showStageDetails, setShowStageDetails] = useState(true)
 
   const supabase = createClient()
 
@@ -41,10 +56,10 @@ export default function DashboardPage() {
           return
         }
 
-        // 精準鎖定當前登入帳號的 Project ID
+        // 讀取包含 stages_state 的 Project 資料
         const { data: projectData, error: projectError } = await supabase
           .from('projects')
-          .select('*')
+          .select('id, address, status, stages_state')
           .eq('id', projectId)
           .single()
 
@@ -57,7 +72,7 @@ export default function DashboardPage() {
 
         setProject(projectData)
 
-        // 精準抓取該 Project ID 的施工日誌
+        // 抓取該 Project ID 的施工日誌
         const { data: logData } = await supabase
           .from('progress_logs')
           .select('*')
@@ -98,6 +113,7 @@ export default function DashboardPage() {
   }
 
   const currentProgress = logs.length > 0 ? logs[0].progress_percent : 0
+  const stagesState = project?.stages_state || {}
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 pb-16">
@@ -118,7 +134,7 @@ export default function DashboardPage() {
 
       <main className="max-w-4xl mx-auto px-4 mt-6 space-y-6">
         {project && (
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-4">
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
               <div>
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">工程單位</span>
@@ -130,6 +146,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {/* 進度條 */}
             <div className="space-y-1.5">
               <div className="w-full bg-slate-100 h-3.5 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
                 <div
@@ -137,6 +154,72 @@ export default function DashboardPage() {
                   style={{ width: `${currentProgress}%` }}
                 />
               </div>
+            </div>
+
+            {/* 🎯 新增：細項工序進度展開區塊 */}
+            <div className="pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowStageDetails(!showStageDetails)}
+                className="w-full flex justify-between items-center py-2 text-sm font-bold text-slate-700 hover:text-blue-600 transition"
+              >
+                <span className="flex items-center gap-2">
+                  📋 各項工序完成度明細
+                </span>
+                <span className="text-xs bg-slate-100 px-2.5 py-1 rounded-full text-slate-500">
+                  {showStageDetails ? '收起 ▲' : '展開 ▼'}
+                </span>
+              </button>
+
+              {showStageDetails && (
+                <div className="mt-4 space-y-4 max-h-[500px] overflow-y-auto pr-1">
+                  {INITIAL_STAGES.map((stage) => {
+                    // 計算該階段完成了多少個小項
+                    const categoryCompletedCount = stage.items.filter(
+                      (item) => stagesState[`${stage.category}-${item}`]
+                    ).length
+                    const isFullyCompleted = categoryCompletedCount === stage.items.length
+
+                    return (
+                      <div key={stage.category} className="border border-slate-200/80 rounded-xl p-4 bg-slate-50/50">
+                        <div className="flex justify-between items-center mb-2.5">
+                          <span className="font-bold text-slate-800 text-sm">
+                            {stage.category}
+                          </span>
+                          <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
+                            isFullyCompleted
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : categoryCompletedCount > 0
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-slate-200 text-slate-500'
+                          }`}>
+                            {categoryCompletedCount} / {stage.items.length} 完成
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {stage.items.map((item) => {
+                            const isChecked = !!stagesState[`${stage.category}-${item}`]
+                            return (
+                              <div
+                                key={item}
+                                className={`flex items-center gap-2 p-2 rounded-lg text-xs font-medium border transition ${
+                                  isChecked
+                                    ? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
+                                    : 'bg-white border-slate-200/80 text-slate-400'
+                                }`}
+                              >
+                                <span>{isChecked ? '🟢' : '⚪'}</span>
+                                <span className={isChecked ? 'font-semibold' : ''}>{item}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
