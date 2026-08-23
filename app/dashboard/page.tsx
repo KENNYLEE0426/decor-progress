@@ -47,6 +47,8 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
+    let projectSubscription: any
+
     const fetchData = async () => {
       try {
         const projectId = localStorage.getItem('client_project_id')
@@ -80,6 +82,26 @@ export default function DashboardPage() {
           .order('created_at', { ascending: false })
 
         if (logData) setLogs(logData)
+
+        // ⚡ 訂閱 Realtime：當 Admin 修改 projects (stages_state) 時，客戶端自動無縫更新
+        projectSubscription = supabase
+          .channel(`project_realtime_${projectId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'projects',
+              filter: `id=eq.${projectId}`,
+            },
+            (payload) => {
+              if (payload.new) {
+                setProject((prev) => (prev ? { ...prev, ...payload.new } : (payload.new as Project)))
+              }
+            }
+          )
+          .subscribe()
+
       } catch (error) {
         console.error('Error fetching data:', error)
       } finally {
@@ -88,6 +110,12 @@ export default function DashboardPage() {
     }
 
     fetchData()
+
+    return () => {
+      if (projectSubscription) {
+        supabase.removeChannel(projectSubscription)
+      }
+    }
   }, [])
 
   const formatDate = (dateString: string) => {
@@ -156,7 +184,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 🎯 細項工序進度區塊（自動隱藏「不需做此項」） */}
+            {/* 細項工序進度區塊 */}
             <div className="pt-2 border-t border-slate-100">
               <button
                 type="button"
@@ -174,17 +202,13 @@ export default function DashboardPage() {
               {showStageDetails && (
                 <div className="mt-4 space-y-4 max-h-[500px] overflow-y-auto pr-1">
                   {INITIAL_STAGES.map((stage) => {
-                    // 過濾掉被 Admin 設定為「不需做此項」(not_needed / skipped / false) 的小項
                     const visibleItems = stage.items.filter((item) => {
                       const state = stagesState[`${stage.category}-${item}`]
-                      // 只要 state 不等於 'not_needed'，且不等於 'disabled' / 'skipped'，就顯示
                       return state !== 'not_needed' && state !== 'disabled' && state !== 'skipped' && state !== false
                     })
 
-                    // 如果整大類所有工序都被隱藏，則不顯示該類別
                     if (visibleItems.length === 0) return null
 
-                    // 計算該階段完成了多少個小項
                     const categoryCompletedCount = visibleItems.filter((item) => {
                       const state = stagesState[`${stage.category}-${item}`]
                       return state === true || state === 'completed'
