@@ -41,14 +41,15 @@ export default function DashboardPage() {
           return
         }
 
-        // 絕對限定：只拿目前 projectId 的資料
+        // 精準鎖定當前登入帳號的 Project ID
         const { data: projectData, error: projectError } = await supabase
           .from('projects')
           .select('*')
           .eq('id', projectId)
-          .maybeSingle()
+          .single()
 
         if (projectError || !projectData) {
+          console.error('搵唔到該單位的 Project 資料:', projectError)
           localStorage.clear()
           window.location.href = '/login'
           return
@@ -56,7 +57,7 @@ export default function DashboardPage() {
 
         setProject(projectData)
 
-        // 拿該單位的專屬施工日誌
+        // 精準抓取該 Project ID 的施工日誌
         const { data: logData } = await supabase
           .from('progress_logs')
           .select('*')
