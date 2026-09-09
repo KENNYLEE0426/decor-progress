@@ -101,7 +101,8 @@ export default function DashboardPage() {
         // Realtime 監聽
         channel = supabase
           .channel(`project_dashboard_${projectId}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'projects', filter: `id=eq.${projectId}` }, (payload) => {
+          .on("postgres_changes", { event: "*", schema: "public", table: "projects", filter: `id=eq.${projectId}` }, async () => { const { data } = await supabase.from("projects").select("*").eq("id", projectId).single(); if (data) setProject(data); })
+=> {
             if (payload.new) setProject((prev) => (prev ? { ...prev, ...payload.new } : (payload.new as Project)))
           })
           .on('postgres_changes', { event: '*', schema: 'public', table: 'receipts', filter: `project_id=eq.${projectId}` }, () => {
