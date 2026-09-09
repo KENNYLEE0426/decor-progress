@@ -219,7 +219,10 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-100 p-6">
       <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Admin 工程管理後台</h1>
+        <button onClick={() => { localStorage.removeItem("admin_auth"); window.location.reload(); }} className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-lg transition">登出系統</button>
+      </div>
 
         {/* 單位選擇器 */}
         <div className="bg-white p-4 rounded-xl shadow border border-slate-200 flex items-center gap-4">
