@@ -29,6 +29,14 @@ interface Receipt {
   created_at: string
 }
 
+interface ProgressLog {
+  id: string
+  project_id: string
+  content: string
+  photo_url: string | null
+  created_at: string
+}
+
 interface StageState {
   [category: string]: {
     enabled: boolean
@@ -63,8 +71,15 @@ export default function AdminPage() {
   const [receiptAmount, setReceiptAmount] = useState('')
   const [receiptDescription, setReceiptDescription] = useState('')
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false)
   const [receiptStatusMsg, setReceiptStatusMsg] = useState('')
+
+  // Progress Logs
+  const [logs, setLogs] = useState<ProgressLog[]>([])
+  const [logContent, setLogContent] = useState('')
+  const [logFile, setLogFile] = useState<File | null>(null)
+  const [isUploadingLog, setIsUploadingLog] = useState(false)
+  const [logStatusMsg, setLogStatusMsg] = useState('')
 
   // Stage States
   const [stageState, setStageState] = useState<StageState>({})
@@ -94,6 +109,7 @@ export default function AdminPage() {
   const loadProjectData = async (projectId: string) => {
     fetchPhasesAndReceipts(projectId)
     fetchStageState(projectId)
+    fetchProgressLogs(projectId)
   }
 
   const fetchPhasesAndReceipts = async (projectId: string) => {
@@ -136,20 +152,40 @@ export default function AdminPage() {
     setReceipts(data || [])
   }
 
+  const fetchProgressLogs = async (projectId: string) => {
+    const { data } = await supabase.from('progress_logs').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
+    setLogs(data || [])
+  }
+
   const fetchStageState = async (projectId: string) => {
     const { data } = await supabase.from('projects').select('stages_state').eq('id', projectId).single()
-    if (data && data.stages_state) {
-      setStageState(data.stages_state)
-    } else {
-      // Default structure
-      const initial: StageState = {}
-      Object.keys(DEFAULT_STAGES).forEach(cat => {
-        initial[cat] = {
-          enabled: true,
-          items: DEFAULT_STAGES[cat].reduce((acc, item) => ({ ...acc, [item]: false }), {})
+    
+    // 初始化預設結構
+    const defaultState: StageState = {}
+    Object.keys(DEFAULT_STAGES).forEach(cat => {
+      defaultState[cat] = {
+        enabled: true,
+        items: DEFAULT_STAGES[cat].reduce((acc, item) => ({ ...acc, [item]: false }), {})
+      }
+    })
+
+    if (data && data.stages_state && Object.keys(data.stages_state).length > 0) {
+      // 合併資料庫中的狀態與預設結構，確保新增欄位不遺失
+      const merged = { ...defaultState }
+      Object.keys(data.stages_state).forEach(cat => {
+        if (merged[cat]) {
+          merged[cat] = {
+            enabled: data.stages_state[cat].enabled ?? true,
+            items: {
+              ...merged[cat].items,
+              ...(data.stages_state[cat].items || {})
+            }
+          }
         }
       })
-      setStageState(initial)
+      setStageState(merged)
+    } else {
+      setStageState(defaultState)
     }
   }
 
@@ -169,6 +205,7 @@ export default function AdminPage() {
     loadProjectData(projectId)
   }
 
+  // --- 材料單據處理 ---
   const handleAddReceipt = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedProjectId || !currentPhase || !receiptAmount) {
@@ -176,7 +213,7 @@ export default function AdminPage() {
       return
     }
 
-    setIsUploading(true)
+    setIsUploadingReceipt(true)
     setReceiptStatusMsg('處理中...')
 
     try {
@@ -213,7 +250,7 @@ export default function AdminPage() {
     } catch (err: any) {
       setReceiptStatusMsg(`❌ 新增失敗: ${err.message || '未知錯誤'}`)
     } finally {
-      setIsUploading(false)
+      setIsUploadingReceipt(false)
     }
   }
 
@@ -236,6 +273,63 @@ export default function AdminPage() {
     fetchPhasesAndReceipts(selectedProjectId)
   }
 
+  // --- 施工動態紀錄處理 ---
+  const handleAddProgressLog = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedProjectId || !logContent) {
+      alert('請輸入施工進度描述')
+      return
+    }
+
+    setIsUploadingLog(true)
+    setLogStatusMsg('處理中...')
+
+    try {
+      let photoUrl = ''
+
+      if (logFile) {
+        const fileExt = logFile.name.split('.').pop()
+        const fileName = `log_${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`
+        const filePath = `logs/${fileName}`
+
+        const { error: uploadError } = await supabase.storage.from('progress-photos').upload(filePath, logFile)
+        if (uploadError) throw uploadError
+
+        const { data: publicUrlData } = supabase.storage.from('progress-photos').getPublicUrl(filePath)
+        photoUrl = publicUrlData.publicUrl
+      }
+
+      const { error: insertError } = await supabase.from('progress_logs').insert({
+        project_id: selectedProjectId,
+        content: logContent,
+        photo_url: photoUrl
+      })
+
+      if (insertError) throw insertError
+
+      setLogStatusMsg('✅ 施工動態新增成功！')
+      setLogContent('')
+      setLogFile(null)
+      fetchProgressLogs(selectedProjectId)
+    } catch (err: any) {
+      setLogStatusMsg(`❌ 新增失敗: ${err.message || '未知錯誤'}`)
+    } finally {
+      setIsUploadingLog(false)
+    }
+  }
+
+  const handleDeleteLog = async (logId: string) => {
+    if (!confirm('確定要刪除這條施工動態嗎？')) return
+
+    const { error } = await supabase.from('progress_logs').delete().eq('id', logId)
+    if (error) {
+      alert(`刪除失敗: ${error.message}`)
+    } else {
+      fetchProgressLogs(selectedProjectId)
+    }
+  }
+
+  // --- 工程階段勾選同步 ---
   const handleToggleCategory = async (category: string) => {
     const updated = {
       ...stageState,
@@ -265,7 +359,17 @@ export default function AdminPage() {
 
   const saveStagesToSupabase = async (updatedState: StageState) => {
     setIsSavingStages(true)
-    await supabase.from('projects').update({ stages_state: updatedState }).eq('id', selectedProjectId)
+    const { error } = await supabase
+      .from('projects')
+      .update({ 
+        stages_state: updatedState,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', selectedProjectId)
+
+    if (error) {
+      alert(`同步客戶端失敗: ${error.message}`)
+    }
     setIsSavingStages(false)
   }
 
@@ -324,7 +428,82 @@ export default function AdminPage() {
           </select>
         </div>
 
-        {/* 材料收費區管理 */}
+        {/* 📸 上傳施工動態紀錄 */}
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            📸 新增施工動態紀錄
+          </h2>
+
+          <form onSubmit={handleAddProgressLog} className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+            <div>
+              <label className="text-xs font-bold text-slate-800 block mb-1">施工紀錄描述 / 進度更新</label>
+              <textarea
+                rows={3}
+                placeholder="例: 今日已完成大廳電線開槽及埋喉工作"
+                value={logContent}
+                onChange={(e) => setLogContent(e.target.value)}
+                className="w-full p-2.5 border rounded-lg text-sm font-bold text-slate-900 placeholder:text-slate-400 bg-white"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-800 block mb-1">現場相片 (可選)</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setLogFile(e.target.files?.[0] || null)}
+                className="w-full p-1.5 border rounded-lg text-xs bg-white text-slate-900 font-bold"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isUploadingLog}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition text-sm disabled:opacity-50"
+            >
+              {isUploadingLog ? '發佈中...' : '發佈施工動態'}
+            </button>
+
+            {logStatusMsg && (
+              <p className={`text-xs font-bold text-center ${logStatusMsg.includes('❌') ? 'text-red-500' : 'text-emerald-600'}`}>
+                {logStatusMsg}
+              </p>
+            )}
+          </form>
+
+          {/* 已發佈動態列表 */}
+          <div className="space-y-3 pt-2">
+            <h3 className="text-sm font-bold text-slate-900">歷史施工動態紀錄 ({logs.length} 筆)</h3>
+            {logs.length === 0 ? (
+              <p className="text-xs font-bold text-slate-500 italic">暫無施工紀錄</p>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {logs.map((log) => (
+                  <div key={log.id} className="flex justify-between items-start bg-white p-3 rounded-lg border border-slate-200 shadow-sm gap-3">
+                    <div className="flex gap-3 items-start">
+                      {log.photo_url && (
+                        <img src={log.photo_url} alt="Progress" className="w-12 h-12 object-cover rounded-md border flex-shrink-0" />
+                      )}
+                      <div>
+                        <p className="text-sm font-bold text-slate-900 whitespace-pre-wrap">{log.content}</p>
+                        <p className="text-xs font-bold text-slate-400 mt-1">{new Date(log.created_at).toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteLog(log.id)}
+                      className="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-600 text-xs font-bold rounded transition flex-shrink-0"
+                    >
+                      刪除
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 📑 材料收費區管理 */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b pb-4">
             <div>
@@ -402,10 +581,10 @@ export default function AdminPage() {
 
               <button
                 type="submit"
-                disabled={isUploading}
+                disabled={isUploadingReceipt}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition text-sm disabled:opacity-50"
               >
-                {isUploading ? '正在新增...' : '新增此單據'}
+                {isUploadingReceipt ? '正在新增...' : '新增此單據'}
               </button>
 
               {receiptStatusMsg && (
@@ -416,7 +595,7 @@ export default function AdminPage() {
             </form>
           </div>
 
-          {/* 本期已新增單據列表（含刪除） */}
+          {/* 本期已新增單據列表 */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-slate-900">
               本期已新增單據 ({receipts.length} 筆)
@@ -464,11 +643,11 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* 工程階段項目設定 */}
+        {/* 🛠 工程階段項目設定 */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-bold text-slate-900">工程階段項目設定（勾選即自動同步客戶端）</h2>
-            {isSavingStages && <span className="text-xs font-bold text-blue-600">自動儲存中...</span>}
+            {isSavingStages && <span className="text-xs font-bold text-blue-600 animate-pulse">💾 自動儲存中...</span>}
           </div>
 
           <div className="space-y-4">
