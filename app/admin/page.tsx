@@ -164,7 +164,7 @@ export default function AdminPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault()
-            if (passwordInput === 'admin123') { // 請依需求自行調整密碼
+            if (passwordInput === '64203981') { // 請依需求自行調整密碼
               localStorage.setItem('admin_auth', 'true')
               setIsAuthenticated(true)
               fetchProjects()
