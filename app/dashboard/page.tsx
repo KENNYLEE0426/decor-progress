@@ -101,14 +101,14 @@ export default function DashboardPage() {
         // Realtime 監聽
         channel = supabase
           .channel(`project_dashboard_${projectId}`)
-          .on("postgres_changes", { event: "*", schema: "public", table: "projects", filter: `id=${projectId}` }, async (payload) => { const { data } = await supabase.from("projects").select("*").eq("id", projectId).single(); if (data) setProject(data); })
+          .on("postgres_changes", { event: "*", schema: "public", table: "projects", filter: `id=eq.${projectId}` }, (payload: any) => { const { data } = await supabase.from("projects").select("*").eq("id", projectId).single(); if (data) setProject(data); })
 => {
             if (payload.new) setProject((prev) => (prev ? { ...prev, ...payload.new } : (payload.new as Project)))
           })
-          .on("postgres_changes", { event: "*", schema: "public", table: "projects", filter: `id=${projectId}` }, (payload) => {
+          .on("postgres_changes", { event: "*", schema: "public", table: "projects", filter: `id=eq.${projectId}` }, (payload: any) => {
             fetchPhasesAndReceipts(projectId)
           })
-          .on("postgres_changes", { event: "*", schema: "public", table: "projects", filter: `id=${projectId}` }, (payload) => {
+          .on("postgres_changes", { event: "*", schema: "public", table: "projects", filter: `id=eq.${projectId}` }, (payload: any) => {
             fetchPhasesAndReceipts(projectId)
           })
           .subscribe()
