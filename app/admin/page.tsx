@@ -24,7 +24,6 @@ export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [passwordInput, setPasswordInput] = useState('')
   const [loginError, setLoginError] = useState(false)
-  const [isLoggingIn, setIsLoggingIn] = useState(false)
 
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
@@ -67,6 +66,7 @@ export default function AdminPage() {
       .eq('project_id', projectId)
       .order('phase_number', { ascending: true })
 
+    // 如果完全沒有期數，自動幫此 Project 建立第 1 期
     if (!phaseData || phaseData.length === 0) {
       const { data: newPhase } = await supabase
         .from('payment_phases')
@@ -82,34 +82,6 @@ export default function AdminPage() {
     if (phaseData) {
       setPhases(phaseData)
       setSelectedPhaseId(phaseData[0].id)
-    }
-  }
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoggingIn(true)
-    setLoginError(false)
-
-    try {
-      const res = await fetch('/api/admin-auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: passwordInput })
-      })
-
-      const data = await res.json()
-
-      if (res.ok && data.success) {
-        localStorage.setItem('admin_auth', 'true')
-        setIsAuthenticated(true)
-        fetchProjects()
-      } else {
-        setLoginError(true)
-      }
-    } catch (err) {
-      setLoginError(true)
-    } finally {
-      setIsLoggingIn(false)
     }
   }
 
@@ -131,6 +103,7 @@ export default function AdminPage() {
     try {
       let photoUrl = ''
 
+      // 上傳圖片到 progress-photos
       if (receiptFile) {
         const fileExt = receiptFile.name.split('.').pop()
         const fileName = `receipt_${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`
@@ -149,6 +122,7 @@ export default function AdminPage() {
         photoUrl = publicUrlData.publicUrl
       }
 
+      // 確保至少有一個 Phase ID
       let currentPhaseId = selectedPhaseId
       if (!currentPhaseId) {
         const { data: newPhase } = await supabase
@@ -159,6 +133,7 @@ export default function AdminPage() {
         if (newPhase) currentPhaseId = newPhase.id
       }
 
+      // 寫入 receipts 表格
       const { error: insertError } = await supabase.from('receipts').insert({
         project_id: selectedProjectId,
         phase_id: currentPhaseId,
@@ -186,7 +161,19 @@ export default function AdminPage() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <form onSubmit={handleLogin} className="bg-white p-6 rounded-xl shadow-xl w-full max-w-sm space-y-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (passwordInput === 'admin123') { // 請依需求自行調整密碼
+              localStorage.setItem('admin_auth', 'true')
+              setIsAuthenticated(true)
+              fetchProjects()
+            } else {
+              setLoginError(true)
+            }
+          }}
+          className="bg-white p-6 rounded-xl shadow-xl w-full max-w-sm space-y-4"
+        >
           <h2 className="text-xl font-bold text-slate-800 text-center">工程管理員登入</h2>
           <input
             type="password"
@@ -195,13 +182,9 @@ export default function AdminPage() {
             onChange={(e) => setPasswordInput(e.target.value)}
             className="w-full p-2 border rounded-lg text-sm text-slate-800"
           />
-          {loginError && <p className="text-xs text-red-500 text-center">密碼錯誤，請重新輸入</p>}
-          <button
-            type="submit"
-            disabled={isLoggingIn}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm font-bold disabled:opacity-50"
-          >
-            {isLoggingIn ? '驗證中...' : '登入系統'}
+          {loginError && <p className="text-xs text-red-500 text-center">密碼錯誤</p>}
+          <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-bold">
+            登入系統
           </button>
         </form>
       </div>
