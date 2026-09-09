@@ -44,17 +44,20 @@ interface StageState {
   }
 }
 
-const CATEGORIES = ['清拆工程', '棚架工程', '泥水工程', '水電工程', '油漆工程', '木工/傢俬', '鋁窗/玻璃', '其他雜項']
+// 100% 精準對齊前台的 INITIAL_STAGES
+const INITIAL_STAGES = [
+  { category: '清拆工程', items: ['進場清拆', '清拆完成'] },
+  { category: '棚架工程', items: ['搭棚', '拆棚'] },
+  { category: '鋁窗工程', items: ['度尺', '拆舊窗', '換新窗', '封泥', '外部唧膠防水', '窗邊執修'] },
+  { category: '電力工程', items: ['夾位', 'MARK位', '介坑', '放喉', '穿線', '裝制面'] },
+  { category: '水喉工程', items: ['夾位', 'MARK位', '介坑', '放喉', '試水', '封泥'] },
+  { category: '泥水工程', items: ['間磚牆', '磚牆批盪', '廚房批盪', '浴室批盪', '盪地台', '起基仔', '廚房鋪磚', '浴室鋪磚', '客廳及房間鋪磚'] },
+  { category: '防水工程', items: ['清潔表面', '第一層防水塗層', '第二層防水塗層', '第三層防水塗層', '第四層防水塗層'] },
+  { category: '雲石工程', items: ['度尺', '裝雲石級咀'] },
+  { category: '油漆工程', items: ['剷底', '落批灰角', '批第一浸灰', '批第二浸灰', '批第三浸灰', '磨平牆身灰', '油第一浸面油', '油第二浸面油', '油第三浸面油'] }
+]
 
-const DEFAULT_STAGES: { [key: string]: string[] } = {
-  '清拆工程': ['進場清拆', '清拆完成'],
-  '棚架工程': ['搭棚工程', '拆棚工程'],
-  '泥水工程': ['防水工程', '鋪砌牆磚', '鋪砌地磚'],
-  '水電工程': ['水電開槽', '電箱改位', '完工測試'],
-  '油漆工程': ['批灰工程', '油漆面漆'],
-  '木工/傢俬': ['木工框架', '傢俬安裝'],
-  '鋁窗/玻璃': ['鋁窗安裝', '玻璃安裝']
-}
+const CATEGORIES = INITIAL_STAGES.map(s => s.category)
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -160,17 +163,15 @@ export default function AdminPage() {
   const fetchStageState = async (projectId: string) => {
     const { data } = await supabase.from('projects').select('stages_state').eq('id', projectId).single()
     
-    // 初始化預設結構
     const defaultState: StageState = {}
-    Object.keys(DEFAULT_STAGES).forEach(cat => {
-      defaultState[cat] = {
+    INITIAL_STAGES.forEach(stage => {
+      defaultState[stage.category] = {
         enabled: true,
-        items: DEFAULT_STAGES[cat].reduce((acc, item) => ({ ...acc, [item]: false }), {})
+        items: stage.items.reduce((acc, item) => ({ ...acc, [item]: false }), {})
       }
     })
 
     if (data && data.stages_state && Object.keys(data.stages_state).length > 0) {
-      // 合併資料庫中的狀態與預設結構，確保新增欄位不遺失
       const merged = { ...defaultState }
       Object.keys(data.stages_state).forEach(cat => {
         if (merged[cat]) {
@@ -205,7 +206,7 @@ export default function AdminPage() {
     loadProjectData(projectId)
   }
 
-  // --- 材料單據處理 ---
+  // --- 單據管理 ---
   const handleAddReceipt = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedProjectId || !currentPhase || !receiptAmount) {
@@ -273,7 +274,7 @@ export default function AdminPage() {
     fetchPhasesAndReceipts(selectedProjectId)
   }
 
-  // --- 施工動態紀錄處理 ---
+  // --- 施工動態管理 ---
   const handleAddProgressLog = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedProjectId || !logContent) {
@@ -329,7 +330,7 @@ export default function AdminPage() {
     }
   }
 
-  // --- 工程階段勾選同步 ---
+  // --- 工序項目切換（即時同步 Supabase） ---
   const handleToggleCategory = async (category: string) => {
     const updated = {
       ...stageState,
@@ -368,7 +369,7 @@ export default function AdminPage() {
       .eq('id', selectedProjectId)
 
     if (error) {
-      alert(`同步客戶端失敗: ${error.message}`)
+      alert(`同步失敗: ${error.message}`)
     }
     setIsSavingStages(false)
   }
@@ -643,7 +644,7 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* 🛠 工程階段項目設定 */}
+        {/* 🛠 工程階段項目設定（精準同步前台 INITIAL_STAGES） */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-bold text-slate-900">工程階段項目設定（勾選即自動同步客戶端）</h2>
@@ -651,7 +652,8 @@ export default function AdminPage() {
           </div>
 
           <div className="space-y-4">
-            {Object.keys(DEFAULT_STAGES).map((category) => {
+            {INITIAL_STAGES.map((stage) => {
+              const category = stage.category
               const isCategoryEnabled = stageState[category]?.enabled ?? true
 
               return (
@@ -670,7 +672,7 @@ export default function AdminPage() {
 
                   {isCategoryEnabled && (
                     <div className="flex flex-wrap gap-2 pt-1">
-                      {DEFAULT_STAGES[category].map((item) => {
+                      {stage.items.map((item) => {
                         const isChecked = stageState[category]?.items?.[item] ?? false
 
                         return (
