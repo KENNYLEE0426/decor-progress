@@ -55,7 +55,6 @@ export default function DashboardPage() {
   const [activeImage, setActiveImage] = useState<string | null>(null)
   const [showStageDetails, setShowStageDetails] = useState(true)
 
-  // 材料收費 UI 狀態
   const [showReceipts, setShowReceipts] = useState(true)
   const [phases, setPhases] = useState<PaymentPhase[]>([])
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>('')
@@ -69,16 +68,22 @@ export default function DashboardPage() {
   }
 
   const loadAllProjectData = async (projectId: string) => {
-    // 1. 載入專案本體（含 stages_state）
-    const { data: projectData } = await supabase
+    const { data: projectData, error } = await supabase
       .from('projects')
-      .select('id, address, status, stages_state')
+      .select('*')
       .eq('id', projectId)
       .single()
 
-    if (projectData) setProject(projectData)
+    if (error) {
+      console.error("🔴 Supabase 讀取 Project 失敗 (可能是 RLS 權限問題):", error)
+    }
 
-    // 2. 載入日誌
+    if (projectData) {
+      console.log("🟢 成功從 Supabase 讀取 Project 資料:", projectData)
+      console.log("🟢 當前 stages_state 內容為:", projectData.stages_state)
+      setProject(projectData)
+    }
+
     const { data: logData } = await supabase
       .from('progress_logs')
       .select('*')
@@ -87,7 +92,6 @@ export default function DashboardPage() {
 
     if (logData) setLogs(logData)
 
-    // 3. 載入材料收費期數與單據
     await fetchPhasesAndReceipts(projectId)
   }
 
@@ -104,13 +108,13 @@ export default function DashboardPage() {
 
         await loadAllProjectData(projectId)
 
-        // 全方位 Realtime 監聽 (包含 projects, logs, receipts, payment_phases)
         const projectChannel = supabase
           .channel(`realtime_project_${projectId}`)
           .on(
             'postgres_changes',
             { event: '*', schema: 'public', table: 'projects', filter: `id=eq.${projectId}` },
             (payload: any) => {
+              console.log("⚡ 收到 Realtime 更新推送:", payload)
               if (payload.new) {
                 setProject(payload.new as Project)
               }
@@ -205,6 +209,30 @@ export default function DashboardPage() {
       hour: '2-digit',
       minute: '2-digit',
     })
+  }
+
+  // 💡 容錯比對函式：檢查後台 stages_state 中是否有勾選此項目
+  const checkIsItemChecked = (category: string, item: string, rawState: Record<string, boolean> = {}) => {
+    if (!rawState) return false
+
+    // 嘗試各種後台可能儲存的 Key 格式
+    const key1 = `${category}-${item}`
+    const key2 = `${category}_${item}`
+    const key3 = item
+
+    if (rawState[key1] === true) return true
+    if (rawState[key2] === true) return true
+    if (rawState[key3] === true) return true
+
+    // 模糊比對（無視空格）
+    const cleanItem = item.trim()
+    for (const [k, val] of Object.entries(rawState)) {
+      if (val && (k.endsWith(cleanItem) || k.includes(cleanItem))) {
+        return true
+      }
+    }
+
+    return false
   }
 
   if (loading) {
@@ -379,16 +407,9 @@ export default function DashboardPage() {
               {showStageDetails && (
                 <div className="mt-4 space-y-4 max-h-[500px] overflow-y-auto pr-1">
                   {INITIAL_STAGES.map((stage) => {
-                    const catKey = `CATEGORY_ENABLED-${stage.category}`
-                    // 若未設定大類開關，預設顯示 (true)
-                    const isCategoryEnabled = stagesState[catKey] !== false
-
-                    if (!isCategoryEnabled) return null
-
-                    const categoryCompletedCount = stage.items.filter((item) => {
-                      const itemKey = `${stage.category}-${item}`
-                      return !!stagesState[itemKey]
-                    }).length
+                    const categoryCompletedCount = stage.items.filter((item) =>
+                      checkIsItemChecked(stage.category, item, stagesState)
+                    ).length
 
                     const isFullyCompleted = categoryCompletedCount === stage.items.length
 
@@ -411,8 +432,7 @@ export default function DashboardPage() {
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {stage.items.map((item) => {
-                            const itemKey = `${stage.category}-${item}`
-                            const isChecked = !!stagesState[itemKey]
+                            const isChecked = checkIsItemChecked(stage.category, item, stagesState)
 
                             return (
                               <div
