@@ -66,7 +66,7 @@ export default function AdminPage() {
 
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
-  
+
   // Payment Phases & Receipts
   const [currentPhase, setCurrentPhase] = useState<PaymentPhase | null>(null)
   const [receipts, setReceipts] = useState<Receipt[]>([])
@@ -110,6 +110,12 @@ export default function AdminPage() {
   }
 
   const loadProjectData = async (projectId: string) => {
+    setCurrentPhase(null)
+    setReceipts([])
+    setLogs([])
+    setReceiptStatusMsg('')
+    setLogStatusMsg('')
+    
     fetchPhasesAndReceipts(projectId)
     fetchStageState(projectId)
     fetchProgressLogs(projectId)
@@ -162,7 +168,7 @@ export default function AdminPage() {
 
   const fetchStageState = async (projectId: string) => {
     const { data } = await supabase.from('projects').select('stages_state').eq('id', projectId).single()
-    
+
     const defaultState: StageState = {}
     INITIAL_STAGES.forEach(stage => {
       defaultState[stage.category] = {
@@ -398,7 +404,7 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-100 p-4 sm:p-6 text-slate-900 font-sans">
       <div className="max-w-4xl mx-auto space-y-6">
-        
+
         {/* Header */}
         <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <h1 className="text-xl font-bold text-slate-900">Admin 工程管理後台</h1>
@@ -678,14 +684,18 @@ export default function AdminPage() {
                         return (
                           <label
                             key={item}
-                            onClick={() => handleToggleStageItem(category, item)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-bold cursor-pointer transition select-none ${
                               isChecked
                                 ? 'bg-emerald-50 border-emerald-400 text-emerald-800'
                                 : 'bg-white border-slate-300 text-slate-800'
                             }`}
                           >
-                            <input type="checkbox" checked={isChecked} readOnly className="rounded text-emerald-600" />
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleToggleStageItem(category, item)}
+                              className="rounded text-emerald-600"
+                            />
                             {item}
                           </label>
                         )
