@@ -34,8 +34,6 @@ interface ProgressLog {
   project_id: string
   title?: string
   description?: string
-  content?: string
-  photo_url?: string | null
   photo_urls?: string[]
   created_at: string
 }
@@ -467,9 +465,8 @@ export default function AdminPage() {
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                 {logs.map((log) => {
-                  const imgUrl =
-                    log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls[0] : log.photo_url || null
-                  const text = log.description || log.content || ''
+                  const imgUrl = log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls[0] : null
+                  const text = log.description || ''
 
                   return (
                     <div

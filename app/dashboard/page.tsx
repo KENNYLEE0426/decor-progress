@@ -6,9 +6,7 @@ import { INITIAL_STAGES } from '@/lib/stages'
 interface ProgressLog {
   id: string
   title?: string
-  content?: string
   description?: string
-  photo_url?: string | null
   photo_urls?: string[]
   created_at: string
 }
@@ -354,9 +352,8 @@ export default function DashboardPage() {
             </div>
           ) : (
             logs.map((log) => {
-              const displayContent = log.content || log.description || ''
-              const photos =
-                log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls : log.photo_url ? [log.photo_url] : []
+              const displayContent = log.description || ''
+              const photos = log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls : []
 
               return (
                 <article

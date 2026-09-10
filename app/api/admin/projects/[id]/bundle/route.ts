@@ -94,7 +94,7 @@ export async function GET(
     const [{ data: logs }, { data: receipts }] = await Promise.all([
       supabase
         .from('progress_logs')
-        .select('id, project_id, title, description, content, photo_url, photo_urls, created_at')
+        .select('id, project_id, title, description, photo_urls, created_at')
         .eq('project_id', projectId)
         .order('created_at', { ascending: false }),
       currentPhase
