@@ -54,7 +54,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [activeImage, setActiveImage] = useState<string | null>(null)
   const [showStageDetails, setShowStageDetails] = useState(true)
-  
+
   // 材料收費 UI 狀態
   const [showReceipts, setShowReceipts] = useState(true)
   const [phases, setPhases] = useState<PaymentPhase[]>([])
@@ -68,8 +68,31 @@ export default function DashboardPage() {
     window.location.href = '/login'
   }
 
+  const loadAllProjectData = async (projectId: string) => {
+    // 1. 載入專案本體（含 stages_state）
+    const { data: projectData } = await supabase
+      .from('projects')
+      .select('id, address, status, stages_state')
+      .eq('id', projectId)
+      .single()
+
+    if (projectData) setProject(projectData)
+
+    // 2. 載入日誌
+    const { data: logData } = await supabase
+      .from('progress_logs')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('created_at', { ascending: false })
+
+    if (logData) setLogs(logData)
+
+    // 3. 載入材料收費期數與單據
+    await fetchPhasesAndReceipts(projectId)
+  }
+
   useEffect(() => {
-    let channel: any
+    let channels: any[] = []
 
     const fetchData = async () => {
       try {
@@ -79,39 +102,49 @@ export default function DashboardPage() {
           return
         }
 
-        const { data: projectData } = await supabase
-          .from('projects')
-          .select('id, address, status, stages_state')
-          .eq('id', projectId)
-          .single()
+        await loadAllProjectData(projectId)
 
-        if (projectData) setProject(projectData)
-
-        const { data: logData } = await supabase
-          .from('progress_logs')
-          .select('*')
-          .eq('project_id', projectId)
-          .order('created_at', { ascending: false })
-
-        if (logData) setLogs(logData)
-
-        // 載入材料收費期數與單據
-        await fetchPhasesAndReceipts(projectId)
-
-        // Realtime 監聽
-        channel = supabase
-          .channel(`project_dashboard_${projectId}`)
+        // 全方位 Realtime 監聽 (包含 projects, logs, receipts, payment_phases)
+        const projectChannel = supabase
+          .channel(`realtime_project_${projectId}`)
           .on(
-            "postgres_changes",
-            { event: "*", schema: "public", table: "projects", filter: `id=eq.${projectId}` },
-            async (payload: any) => {
-              const { data } = await supabase.from("projects").select("*").eq("id", projectId).single()
-              if (data) setProject(data)
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'projects', filter: `id=eq.${projectId}` },
+            (payload: any) => {
+              if (payload.new) {
+                setProject(payload.new as Project)
+              }
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'progress_logs', filter: `project_id=eq.${projectId}` },
+            () => {
+              supabase
+                .from('progress_logs')
+                .select('*')
+                .eq('project_id', projectId)
+                .order('created_at', { ascending: false })
+                .then(({ data }) => data && setLogs(data))
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'receipts', filter: `project_id=eq.${projectId}` },
+            () => {
+              fetchPhasesAndReceipts(projectId)
+            }
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'payment_phases', filter: `project_id=eq.${projectId}` },
+            () => {
               fetchPhasesAndReceipts(projectId)
             }
           )
           .subscribe()
 
+        channels.push(projectChannel)
       } catch (error) {
         console.error('Error fetching data:', error)
       } finally {
@@ -122,7 +155,7 @@ export default function DashboardPage() {
     fetchData()
 
     return () => {
-      if (channel) supabase.removeChannel(channel)
+      channels.forEach(ch => supabase.removeChannel(ch))
     }
   }, [])
 
@@ -135,14 +168,13 @@ export default function DashboardPage() {
 
     if (phaseData && phaseData.length > 0) {
       setPhases(phaseData)
-      
-      // 確定要載入哪一期的單據
+
       let targetPhaseId = overridePhaseId || selectedPhaseId
       if (!targetPhaseId || !phaseData.some(p => p.id === targetPhaseId)) {
         const activePhase = phaseData.find(p => p.status === 'pending') || phaseData[0]
         targetPhaseId = activePhase.id
       }
-      
+
       setSelectedPhaseId(targetPhaseId)
       await loadReceiptsByPhase(projectId, targetPhaseId)
     }
@@ -189,7 +221,6 @@ export default function DashboardPage() {
   const currentProgress = logs.length > 0 ? logs[0].progress_percent : 0
   const stagesState = project?.stages_state || {}
 
-  // 計算選定期數的總金額
   const totalAmount = receipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
   const currentSelectedPhase = phases.find(p => p.id === selectedPhaseId)
 
@@ -234,7 +265,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 🧾 材料收費區 */}
+            {/* 材料收費區 */}
             <div className="pt-2 border-t border-slate-100">
               <button
                 type="button"
@@ -251,7 +282,6 @@ export default function DashboardPage() {
 
               {showReceipts && (
                 <div className="mt-3 bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-4">
-                  {/* 期數選擇與總金額算計 */}
                   <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-white p-3.5 rounded-lg border border-slate-200/80 shadow-sm">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-slate-500">期數選擇：</span>
@@ -276,7 +306,6 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {/* 狀態標籤 */}
                   {currentSelectedPhase && (
                     <div className="flex justify-between items-center text-xs px-1">
                       <span className="text-slate-500">
@@ -290,7 +319,6 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  {/* 單據明細清單 */}
                   <div className="space-y-2">
                     {receipts.length === 0 ? (
                       <p className="text-xs text-slate-400 text-center py-4 italic">本期暫無材料單據紀錄</p>
@@ -352,6 +380,7 @@ export default function DashboardPage() {
                 <div className="mt-4 space-y-4 max-h-[500px] overflow-y-auto pr-1">
                   {INITIAL_STAGES.map((stage) => {
                     const catKey = `CATEGORY_ENABLED-${stage.category}`
+                    // 若未設定大類開關，預設顯示 (true)
                     const isCategoryEnabled = stagesState[catKey] !== false
 
                     if (!isCategoryEnabled) return null
@@ -390,12 +419,12 @@ export default function DashboardPage() {
                                 key={item}
                                 className={`flex items-center gap-2 p-2 rounded-lg text-xs font-medium border transition ${
                                   isChecked
-                                    ? 'bg-emerald-50/80 border-emerald-200 text-emerald-800'
+                                    ? 'bg-emerald-50/80 border-emerald-200 text-emerald-800 font-semibold'
                                     : 'bg-white border-slate-200/80 text-slate-400'
                                 }`}
                               >
                                 <span>{isChecked ? '🟢' : '⚪'}</span>
-                                <span className={isChecked ? 'font-semibold' : ''}>{item}</span>
+                                <span>{item}</span>
                               </div>
                             )
                           })}
