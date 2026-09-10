@@ -9,7 +9,7 @@ export async function GET() {
     const supabase = createServiceClient()
     const { data, error } = await supabase
       .from('projects')
-      .select('id, address, access_code, status, created_at')
+      .select('id, address, status, created_at')
       .order('created_at', { ascending: false })
 
     if (error) {

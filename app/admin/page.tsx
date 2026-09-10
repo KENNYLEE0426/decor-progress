@@ -6,7 +6,6 @@ import { INITIAL_STAGES } from '@/lib/stages'
 interface Project {
   id: string
   address: string
-  access_code: string
   status: string
   created_at?: string
 }
@@ -92,15 +91,20 @@ export default function AdminPage() {
     check()
   }, [])
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (preferredId?: string) => {
     const res = await fetch('/api/admin/projects')
-    if (!res.ok) return
-    const data = await res.json()
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      alert(data.error || '載入工程單位失敗')
+      return
+    }
     const list: Project[] = data.projects || []
     setProjects(list)
     if (list.length > 0) {
-      const nextId = selectedProjectId || list[0].id
-      if (!selectedProjectId) setSelectedProjectId(nextId)
+      const nextId =
+        (preferredId && list.some((p) => p.id === preferredId) && preferredId) ||
+        list[0].id
+      setSelectedProjectId(nextId)
       await loadProjectData(nextId)
     }
   }
@@ -370,11 +374,17 @@ export default function AdminPage() {
             onChange={(e) => handleSelectProject(e.target.value)}
             className="w-full p-2.5 border rounded-lg bg-white font-bold text-slate-900 text-base"
           >
-            {projects.map((p) => (
-              <option key={p.id} value={p.id} className="text-slate-900 font-bold">
-                {p.address} {p.access_code ? `(進場 Code: ${p.access_code})` : ''}
+            {projects.length === 0 ? (
+              <option value="" disabled>
+                暫無工程單位
               </option>
-            ))}
+            ) : (
+              projects.map((p) => (
+                <option key={p.id} value={p.id} className="text-slate-900 font-bold">
+                  {p.address}
+                </option>
+              ))
+            )}
           </select>
         </div>
 

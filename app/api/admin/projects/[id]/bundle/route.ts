@@ -50,7 +50,7 @@ export async function GET(
 
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('id, address, access_code, status, stages_state')
+      .select('id, address, status, stages_state')
       .eq('id', projectId)
       .single()
 
@@ -110,7 +110,6 @@ export async function GET(
       project: {
         id: project.id,
         address: project.address,
-        access_code: project.access_code,
         status: project.status,
       },
       stages_state: mergeStageState(project.stages_state),
