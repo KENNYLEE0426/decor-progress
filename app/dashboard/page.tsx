@@ -16,7 +16,7 @@ interface Project {
   id: string
   address: string
   status: string
-  stages_state?: Record<string, boolean>
+  stages_state?: Record<string, any>
 }
 
 interface PaymentPhase {
@@ -68,19 +68,15 @@ export default function DashboardPage() {
   }
 
   const loadAllProjectData = async (projectId: string) => {
-    const { data: projectData, error } = await supabase
+    const { data: projectData } = await supabase
       .from('projects')
-      .select('*')
+      .select('id, address, status, stages_state')
       .eq('id', projectId)
       .single()
 
-    if (error) {
-      console.error("🔴 Supabase 讀取 Project 失敗 (可能是 RLS 權限問題):", error)
-    }
-
     if (projectData) {
-      console.log("🟢 成功從 Supabase 讀取 Project 資料:", projectData)
-      console.log("🟢 當前 stages_state 內容為:", projectData.stages_state)
+      console.log('成功從 Supabase 讀取 Project 資料:', projectData)
+      console.log('當前 stages_state 內容為:', projectData.stages_state)
       setProject(projectData)
     }
 
@@ -114,8 +110,8 @@ export default function DashboardPage() {
             'postgres_changes',
             { event: '*', schema: 'public', table: 'projects', filter: `id=eq.${projectId}` },
             (payload: any) => {
-              console.log("⚡ 收到 Realtime 更新推送:", payload)
               if (payload.new) {
+                console.log('Realtime 收到 Projects 更新:', payload.new)
                 setProject(payload.new as Project)
               }
             }
@@ -211,26 +207,19 @@ export default function DashboardPage() {
     })
   }
 
-  // 💡 容錯比對函式：檢查後台 stages_state 中是否有勾選此項目
-  const checkIsItemChecked = (category: string, item: string, rawState: Record<string, boolean> = {}) => {
-    if (!rawState) return false
+  // 核心解讀邏輯：兼容雙向資料結構（Nested Object 與 Flat Key）
+  const checkIsItemChecked = (category: string, item: string) => {
+    if (!project?.stages_state) return false
+    const state = project.stages_state
 
-    // 嘗試各種後台可能儲存的 Key 格式
-    const key1 = `${category}-${item}`
-    const key2 = `${category}_${item}`
-    const key3 = item
-
-    if (rawState[key1] === true) return true
-    if (rawState[key2] === true) return true
-    if (rawState[key3] === true) return true
-
-    // 模糊比對（無視空格）
-    const cleanItem = item.trim()
-    for (const [k, val] of Object.entries(rawState)) {
-      if (val && (k.endsWith(cleanItem) || k.includes(cleanItem))) {
-        return true
-      }
+    // 1. 檢查 Nested 結構：state['棚架工程']['搭棚']
+    if (state[category] && typeof state[category] === 'object') {
+      if (state[category][item] === true) return true
     }
+
+    // 2. 檢查 Flat 結構：state['棚架工程-搭棚']
+    const flatKey = `${category}-${item}`
+    if (state[flatKey] === true) return true
 
     return false
   }
@@ -247,7 +236,6 @@ export default function DashboardPage() {
   }
 
   const currentProgress = logs.length > 0 ? logs[0].progress_percent : 0
-  const stagesState = project?.stages_state || {}
 
   const totalAmount = receipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
   const currentSelectedPhase = phases.find(p => p.id === selectedPhaseId)
@@ -408,7 +396,7 @@ export default function DashboardPage() {
                 <div className="mt-4 space-y-4 max-h-[500px] overflow-y-auto pr-1">
                   {INITIAL_STAGES.map((stage) => {
                     const categoryCompletedCount = stage.items.filter((item) =>
-                      checkIsItemChecked(stage.category, item, stagesState)
+                      checkIsItemChecked(stage.category, item)
                     ).length
 
                     const isFullyCompleted = categoryCompletedCount === stage.items.length
@@ -432,7 +420,7 @@ export default function DashboardPage() {
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {stage.items.map((item) => {
-                            const isChecked = checkIsItemChecked(stage.category, item, stagesState)
+                            const isChecked = checkIsItemChecked(stage.category, item)
 
                             return (
                               <div
