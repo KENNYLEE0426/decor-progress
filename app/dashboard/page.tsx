@@ -234,13 +234,11 @@ export default function DashboardPage() {
     }
   })
 
-  const calculatedProgress = totalStageItemsCount > 0 
-    ? Math.round((completedStageItemsCount / totalStageItemsCount) * 100) 
-    : 0
-
-  const currentProgress = (logs.length > 0 && logs[0].progress_percent !== undefined) 
-    ? logs[0].progress_percent 
-    : calculatedProgress
+  // 整體進度只跟各項工序勾選完成度，唔再用日誌嘅 progress_percent 覆蓋
+  const currentProgress =
+    totalStageItemsCount > 0
+      ? Math.round((completedStageItemsCount / totalStageItemsCount) * 100)
+      : 0
 
   const totalAmount = receipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
   const currentSelectedPhase = phases.find(p => p.id === selectedPhaseId)
