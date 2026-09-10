@@ -35,62 +35,79 @@ export default function LoginNewPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 space-y-6">
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-100 text-blue-600 rounded-xl mb-2 text-xl font-bold">
-            🏠
-          </div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">裝修工程進度查詢</h1>
-          <p className="text-xs text-slate-500">請輸入我們提供給您的電話號碼與 4 位數 PIN 碼</p>
+    <div className="min-h-screen bg-[#f3f1ee] text-stone-800 flex flex-col">
+      <header className="bg-[#1c1917] text-stone-100 border-b border-stone-700/60">
+        <div className="max-w-4xl mx-auto px-4 py-4">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-teal-400/90 font-medium">Progress Portal</p>
+          <h1 className="text-lg sm:text-xl font-semibold tracking-wide mt-0.5">裝修工程進度查詢</h1>
         </div>
+      </header>
 
-        {errorMsg && (
-          <div className="p-3.5 bg-red-50 border border-red-200 text-red-600 rounded-xl text-xs font-medium leading-relaxed">
-            ⚠️ {errorMsg}
+      <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
+            <div className="px-6 py-5 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50">
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-400">客戶登入</p>
+              <h2 className="text-xl font-semibold text-stone-900 mt-1">查閱你的工程進度</h2>
+              <p className="text-xs text-stone-500 mt-2 leading-relaxed">
+                請輸入我們提供的電話號碼與 4 位數 PIN 碼
+              </p>
+            </div>
+
+            <form onSubmit={handleLogin} className="px-6 py-6 space-y-4">
+              {errorMsg && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-xs font-medium leading-relaxed">
+                  {errorMsg}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-medium uppercase tracking-[0.12em] text-stone-500 mb-1.5">
+                  電話號碼
+                </label>
+                <input
+                  type="tel"
+                  required
+                  maxLength={8}
+                  inputMode="numeric"
+                  placeholder="8 位電話號碼"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm text-stone-900 placeholder-stone-400 bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/30 focus:border-teal-700 transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium uppercase tracking-[0.12em] text-stone-500 mb-1.5">
+                  PIN 碼
+                </label>
+                <input
+                  type="password"
+                  required
+                  maxLength={4}
+                  inputMode="numeric"
+                  placeholder="4 位 PIN"
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  className="w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm text-stone-900 placeholder-stone-400 bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/30 focus:border-teal-700 transition tracking-[0.35em]"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#1c1917] hover:bg-stone-800 disabled:opacity-60 text-stone-50 font-semibold py-3 rounded-lg transition text-sm mt-1"
+              >
+                {loading ? '驗證中…' : '進入進度查詢'}
+              </button>
+            </form>
           </div>
-        )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-              電話號碼
-            </label>
-            <input
-              type="tel"
-              required
-              maxLength={8}
-              placeholder="請輸入電話號碼"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="w-full border border-slate-300 rounded-xl p-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-              4 位數 PIN 碼
-            </label>
-            <input
-              type="password"
-              required
-              maxLength={4}
-              placeholder="請輸入4位PIN碼"
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              className="w-full border border-slate-300 rounded-xl p-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition tracking-widest"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-md transition active:scale-[0.99] text-sm mt-2"
-          >
-            {loading ? '驗證身份中...' : '登入系統'}
-          </button>
-        </form>
-      </div>
+          <p className="text-center text-[11px] text-stone-400 mt-5 tracking-wide">
+            如未能登入，請聯絡你的工程負責人
+          </p>
+        </div>
+      </main>
     </div>
   )
 }
