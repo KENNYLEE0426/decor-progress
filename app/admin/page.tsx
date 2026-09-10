@@ -115,7 +115,7 @@ export default function AdminPage() {
     setLogs([])
     setReceiptStatusMsg('')
     setLogStatusMsg('')
-    
+
     fetchPhasesAndReceipts(projectId)
     fetchStageState(projectId)
     fetchProgressLogs(projectId)
@@ -336,7 +336,7 @@ export default function AdminPage() {
     }
   }
 
-  // --- 工序項目切換（即時同步 Supabase） ---
+  // --- 工序項目切換（儲存至 Supabase） ---
   const handleToggleCategory = async (category: string) => {
     const updated = {
       ...stageState,
@@ -650,10 +650,10 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* 🛠 工程階段項目設定（精準同步前台 INITIAL_STAGES） */}
+        {/* 📋 各項工序完成度明細（同步客戶端） */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-bold text-slate-900">工程階段項目設定（勾選即自動同步客戶端）</h2>
+            <h2 className="text-lg font-bold text-slate-900">📋 各項工序完成度明細</h2>
             {isSavingStages && <span className="text-xs font-bold text-blue-600 animate-pulse">💾 自動儲存中...</span>}
           </div>
 

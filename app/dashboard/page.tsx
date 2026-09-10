@@ -5,10 +5,12 @@ import { createClient } from '@/lib/supabase'
 
 interface ProgressLog {
   id: string
-  title: string
-  description: string
-  progress_percent: number
-  photo_urls: string[]
+  title?: string
+  content?: string
+  description?: string
+  progress_percent?: number
+  photo_url?: string | null
+  photo_urls?: string[]
   created_at: string
 }
 
@@ -203,17 +205,19 @@ export default function DashboardPage() {
     })
   }
 
-  // 💡 通用勾選檢查函式：相容後台各種 JSON Key 與型態格式
+  // 精準對齊後台資料結構，同時兼顧向後相容
   const isItemChecked = (category: string, item: string, state: Record<string, any>) => {
     if (!state) return false
-    
-    // 檢查複合 Key：例如 "清拆工程-進場清拆"
-    const fullKey = `${category}-${item}`
-    // 檢查單獨 Key：例如 "進場清拆"
-    const val = state[fullKey] !== undefined ? state[fullKey] : state[item]
 
-    if (val === true || val === 'true' || val === 1 || val === '1') return true
-    return false
+    // 後台標準結構：state[category].items[item]
+    if (state[category]?.items?.[item] !== undefined) {
+      return Boolean(state[category].items[item])
+    }
+
+    // 舊版平面 key 相容 fallback
+    const fullKey = `${category}-${item}`
+    const val = state[fullKey] !== undefined ? state[fullKey] : state[item]
+    return val === true || val === 'true' || val === 1 || val === '1'
   }
 
   if (loading) {
@@ -227,8 +231,31 @@ export default function DashboardPage() {
     )
   }
 
-  const currentProgress = logs.length > 0 ? logs[0].progress_percent : 0
   const stagesState = project?.stages_state || {}
+
+  // 根據所有勾選項自動計算整體完成度 %
+  let totalStageItemsCount = 0
+  let completedStageItemsCount = 0
+
+  INITIAL_STAGES.forEach((stage) => {
+    const isCategoryEnabled = stagesState[stage.category]?.enabled ?? true
+    if (isCategoryEnabled) {
+      stage.items.forEach((item) => {
+        totalStageItemsCount++
+        if (isItemChecked(stage.category, item, stagesState)) {
+          completedStageItemsCount++
+        }
+      })
+    }
+  })
+
+  const calculatedProgress = totalStageItemsCount > 0 
+    ? Math.round((completedStageItemsCount / totalStageItemsCount) * 100) 
+    : 0
+
+  const currentProgress = (logs.length > 0 && logs[0].progress_percent !== undefined) 
+    ? logs[0].progress_percent 
+    : calculatedProgress
 
   const totalAmount = receipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
   const currentSelectedPhase = phases.find(p => p.id === selectedPhaseId)
@@ -370,7 +397,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* 細項工序進度區塊 */}
+            {/* 📋 各項工序完成度明細 */}
             <div className="pt-2 border-t border-slate-100">
               <button
                 type="button"
@@ -388,8 +415,7 @@ export default function DashboardPage() {
               {showStageDetails && (
                 <div className="mt-4 space-y-4 max-h-[500px] overflow-y-auto pr-1">
                   {INITIAL_STAGES.map((stage) => {
-                    const catKey = `CATEGORY_ENABLED-${stage.category}`
-                    const isCategoryEnabled = stagesState[catKey] !== false
+                    const isCategoryEnabled = stagesState[stage.category]?.enabled ?? true
 
                     if (!isCategoryEnabled) return null
 
@@ -444,6 +470,7 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* 施工動態列表 */}
         <div className="space-y-4">
           <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
             <span>施工動態紀錄</span>
@@ -455,53 +482,61 @@ export default function DashboardPage() {
               尚未發布任何施工日誌。
             </div>
           ) : (
-            logs.map((log) => (
-              <article
-                key={log.id}
-                className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200/80 transition hover:shadow-md space-y-4"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                  <h4 className="text-lg font-bold text-slate-900">{log.title}</h4>
-                  <time className="text-xs text-slate-400 font-medium">
-                    📅 {formatDate(log.created_at)}
-                  </time>
-                </div>
+            logs.map((log) => {
+              const displayContent = log.content || log.description || ''
+              const photos = log.photo_urls && log.photo_urls.length > 0 
+                ? log.photo_urls 
+                : log.photo_url ? [log.photo_url] : []
 
-                {log.description && (
-                  <p className="text-slate-600 text-sm leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-100 whitespace-pre-line">
-                    {log.description}
-                  </p>
-                )}
-
-                {log.photo_urls && log.photo_urls.length > 0 && (
-                  <div className="space-y-2">
-                    <span className="text-xs font-semibold text-slate-400 tracking-wider">
-                      施工現場照片 ({log.photo_urls.length} 張)
-                    </span>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                      {log.photo_urls.map((url, index) => (
-                        <div
-                          key={index}
-                          onClick={() => setActiveImage(url)}
-                          className="group relative aspect-square bg-slate-100 rounded-xl overflow-hidden cursor-pointer border border-slate-200/60 shadow-sm hover:opacity-95 transition"
-                        >
-                          <img
-                            src={url}
-                            alt={`施工照片 ${index + 1}`}
-                            className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                            loading="lazy"
-                          />
-                        </div>
-                      ))}
-                    </div>
+              return (
+                <article
+                  key={log.id}
+                  className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200/80 transition hover:shadow-md space-y-4"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <h4 className="text-lg font-bold text-slate-900">{log.title || '現場施工進度'}</h4>
+                    <time className="text-xs text-slate-400 font-medium">
+                      📅 {formatDate(log.created_at)}
+                    </time>
                   </div>
-                )}
-              </article>
-            ))
+
+                  {displayContent && (
+                    <p className="text-slate-600 text-sm leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-100 whitespace-pre-line">
+                      {displayContent}
+                    </p>
+                  )}
+
+                  {photos.length > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-xs font-semibold text-slate-400 tracking-wider">
+                        施工現場照片 ({photos.length} 張)
+                      </span>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        {photos.map((url, index) => (
+                          <div
+                            key={index}
+                            onClick={() => setActiveImage(url)}
+                            className="group relative aspect-square bg-slate-100 rounded-xl overflow-hidden cursor-pointer border border-slate-200/60 shadow-sm hover:opacity-95 transition"
+                          >
+                            <img
+                              src={url}
+                              alt={`施工照片 ${index + 1}`}
+                              className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                              loading="lazy"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </article>
+              )
+            })
           )}
         </div>
       </main>
 
+      {/* 圖片預覽彈窗 */}
       {activeImage && (
         <div
           className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
