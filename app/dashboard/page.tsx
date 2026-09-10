@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase'
 import { INITIAL_STAGES } from '@/lib/stages'
 
 interface ProgressLog {
@@ -9,7 +8,6 @@ interface ProgressLog {
   title?: string
   content?: string
   description?: string
-  progress_percent?: number
   photo_url?: string | null
   photo_urls?: string[]
   created_at: string
@@ -46,141 +44,52 @@ export default function DashboardPage() {
   const [activeImage, setActiveImage] = useState<string | null>(null)
   const [showStageDetails, setShowStageDetails] = useState(true)
 
-  // 材料收費 UI 狀態
   const [showReceipts, setShowReceipts] = useState(true)
   const [phases, setPhases] = useState<PaymentPhase[]>([])
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>('')
   const [receipts, setReceipts] = useState<Receipt[]>([])
 
-  const supabase = createClient()
-
-  const handleLogout = () => {
-    localStorage.clear()
+  const handleLogout = async () => {
+    await fetch('/api/client/logout', { method: 'POST' })
     window.location.href = '/login'
   }
 
-  const loadAllProjectData = async (projectId: string) => {
-    const { data: projectData } = await supabase
-      .from('projects')
-      .select('id, address, status, stages_state')
-      .eq('id', projectId)
-      .single()
-
-    if (projectData) setProject(projectData)
-
-    const { data: logData } = await supabase
-      .from('progress_logs')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('created_at', { ascending: false })
-
-    if (logData) setLogs(logData)
-
-    await fetchPhasesAndReceipts(projectId)
+  const loadDashboard = async () => {
+    const res = await fetch('/api/client/dashboard')
+    if (res.status === 401) {
+      window.location.href = '/login'
+      return
+    }
+    if (!res.ok) {
+      throw new Error('載入失敗')
+    }
+    const data = await res.json()
+    setProject(data.project)
+    setLogs(data.logs || [])
+    setPhases(data.phases || [])
+    setSelectedPhaseId(data.selectedPhaseId || '')
+    setReceipts(data.receipts || [])
   }
 
   useEffect(() => {
-    let channels: any[] = []
+    loadDashboard()
+      .catch((err) => console.error(err))
+      .finally(() => setLoading(false))
 
-    const fetchData = async () => {
-      try {
-        const projectId = localStorage.getItem('client_project_id')
-        if (!projectId) {
-          window.location.href = '/login'
-          return
-        }
+    const timer = setInterval(() => {
+      loadDashboard().catch(() => {})
+    }, 30000)
 
-        await loadAllProjectData(projectId)
-
-        const projectChannel = supabase
-          .channel(`realtime_project_${projectId}`)
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'projects', filter: `id=eq.${projectId}` },
-            (payload: any) => {
-              if (payload.new) {
-                setProject(payload.new as Project)
-              }
-            }
-          )
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'progress_logs', filter: `project_id=eq.${projectId}` },
-            () => {
-              supabase
-                .from('progress_logs')
-                .select('*')
-                .eq('project_id', projectId)
-                .order('created_at', { ascending: false })
-                .then(({ data }) => data && setLogs(data))
-            }
-          )
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'receipts', filter: `project_id=eq.${projectId}` },
-            () => {
-              fetchPhasesAndReceipts(projectId)
-            }
-          )
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'payment_phases', filter: `project_id=eq.${projectId}` },
-            () => {
-              fetchPhasesAndReceipts(projectId)
-            }
-          )
-          .subscribe()
-
-        channels.push(projectChannel)
-      } catch (error) {
-        console.error('Error fetching data:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-
-    return () => {
-      channels.forEach(ch => supabase.removeChannel(ch))
-    }
+    return () => clearInterval(timer)
   }, [])
 
-  const fetchPhasesAndReceipts = async (projectId: string, overridePhaseId?: string) => {
-    const { data: phaseData } = await supabase
-      .from('payment_phases')
-      .select('*')
-      .eq('project_id', projectId)
-      .order('phase_number', { ascending: false })
-
-    if (phaseData && phaseData.length > 0) {
-      setPhases(phaseData)
-
-      let targetPhaseId = overridePhaseId || selectedPhaseId
-      if (!targetPhaseId || !phaseData.some(p => p.id === targetPhaseId)) {
-        const activePhase = phaseData.find(p => p.status === 'pending') || phaseData[0]
-        targetPhaseId = activePhase.id
-      }
-
-      setSelectedPhaseId(targetPhaseId)
-      await loadReceiptsByPhase(projectId, targetPhaseId)
-    }
-  }
-
-  const loadReceiptsByPhase = async (projectId: string, phaseId: string) => {
-    const { data: receiptData } = await supabase
-      .from('receipts')
-      .select('*')
-      .eq('project_id', projectId)
-      .eq('phase_id', phaseId)
-      .order('created_at', { ascending: false })
-
-    if (receiptData) setReceipts(receiptData)
-  }
-
-  const handlePhaseChange = (phaseId: string) => {
+  const handlePhaseChange = async (phaseId: string) => {
     setSelectedPhaseId(phaseId)
-    if (project) loadReceiptsByPhase(project.id, phaseId)
+    const res = await fetch(`/api/client/receipts?phaseId=${encodeURIComponent(phaseId)}`)
+    if (res.ok) {
+      const data = await res.json()
+      setReceipts(data.receipts || [])
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -234,14 +143,11 @@ export default function DashboardPage() {
     }
   })
 
-  // 整體進度只跟各項工序勾選完成度，唔再用日誌嘅 progress_percent 覆蓋
   const currentProgress =
-    totalStageItemsCount > 0
-      ? Math.round((completedStageItemsCount / totalStageItemsCount) * 100)
-      : 0
+    totalStageItemsCount > 0 ? Math.round((completedStageItemsCount / totalStageItemsCount) * 100) : 0
 
   const totalAmount = receipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
-  const currentSelectedPhase = phases.find(p => p.id === selectedPhaseId)
+  const currentSelectedPhase = phases.find((p) => p.id === selectedPhaseId)
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-800 pb-16">
@@ -274,7 +180,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 進度條 */}
             <div className="space-y-1.5">
               <div className="w-full bg-slate-100 h-3.5 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
                 <div
@@ -284,16 +189,13 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 🧾 材料收費區 */}
             <div className="pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setShowReceipts(!showReceipts)}
                 className="w-full flex justify-between items-center py-2 text-sm font-bold text-slate-700 hover:text-blue-600 transition"
               >
-                <span className="flex items-center gap-2">
-                  🧾 材料收費明細
-                </span>
+                <span className="flex items-center gap-2">🧾 材料收費明細</span>
                 <span className="text-xs bg-slate-100 px-2.5 py-1 rounded-full text-slate-500">
                   {showReceipts ? '收起 ▲' : '展開 ▼'}
                 </span>
@@ -343,7 +245,10 @@ export default function DashboardPage() {
                       <p className="text-xs text-slate-400 text-center py-4 italic">本期暫無材料單據紀錄</p>
                     ) : (
                       receipts.map((r) => (
-                        <div key={r.id} className="bg-white p-3 rounded-lg border border-slate-200/80 flex items-center justify-between gap-3 shadow-sm">
+                        <div
+                          key={r.id}
+                          className="bg-white p-3 rounded-lg border border-slate-200/80 flex items-center justify-between gap-3 shadow-sm"
+                        >
                           <div className="flex items-center gap-3 min-w-0">
                             {r.photo_url ? (
                               <img
@@ -361,12 +266,8 @@ export default function DashboardPage() {
                               <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 mb-1">
                                 {r.category}
                               </span>
-                              <p className="text-xs font-semibold text-slate-800 truncate">
-                                {r.description || '無描述'}
-                              </p>
-                              <p className="text-[10px] text-slate-400">
-                                {formatDate(r.created_at)}
-                              </p>
+                              <p className="text-xs font-semibold text-slate-800 truncate">{r.description || '無描述'}</p>
+                              <p className="text-[10px] text-slate-400">{formatDate(r.created_at)}</p>
                             </div>
                           </div>
                           <span className="text-sm font-extrabold text-slate-900 flex-shrink-0">
@@ -380,16 +281,13 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* 📋 各項工序完成度明細 */}
             <div className="pt-2 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setShowStageDetails(!showStageDetails)}
                 className="w-full flex justify-between items-center py-2 text-sm font-bold text-slate-700 hover:text-blue-600 transition"
               >
-                <span className="flex items-center gap-2">
-                  📋 各項工序完成度明細
-                </span>
+                <span className="flex items-center gap-2">📋 各項工序完成度明細</span>
                 <span className="text-xs bg-slate-100 px-2.5 py-1 rounded-full text-slate-500">
                   {showStageDetails ? '收起 ▲' : '展開 ▼'}
                 </span>
@@ -399,28 +297,26 @@ export default function DashboardPage() {
                 <div className="mt-4 space-y-4 max-h-[500px] overflow-y-auto pr-1">
                   {INITIAL_STAGES.map((stage) => {
                     const isCategoryEnabled = stagesState[stage.category]?.enabled ?? true
-
                     if (!isCategoryEnabled) return null
 
                     const categoryCompletedCount = stage.items.filter((item) =>
                       isItemChecked(stage.category, item, stagesState)
                     ).length
-
                     const isFullyCompleted = categoryCompletedCount === stage.items.length
 
                     return (
                       <div key={stage.category} className="border border-slate-200/80 rounded-xl p-4 bg-slate-50/50">
                         <div className="flex justify-between items-center mb-2.5">
-                          <span className="font-bold text-slate-800 text-sm">
-                            {stage.category}
-                          </span>
-                          <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
-                            isFullyCompleted
-                              ? 'bg-emerald-100 text-emerald-700'
-                              : categoryCompletedCount > 0
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-slate-200 text-slate-500'
-                          }`}>
+                          <span className="font-bold text-slate-800 text-sm">{stage.category}</span>
+                          <span
+                            className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
+                              isFullyCompleted
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : categoryCompletedCount > 0
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-slate-200 text-slate-500'
+                            }`}
+                          >
                             {categoryCompletedCount} / {stage.items.length} 完成
                           </span>
                         </div>
@@ -428,7 +324,6 @@ export default function DashboardPage() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {stage.items.map((item) => {
                             const isChecked = isItemChecked(stage.category, item, stagesState)
-
                             return (
                               <div
                                 key={item}
@@ -453,7 +348,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* 施工動態列表 */}
         <div className="space-y-4">
           <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
             <span>施工動態紀錄</span>
@@ -467,9 +361,8 @@ export default function DashboardPage() {
           ) : (
             logs.map((log) => {
               const displayContent = log.content || log.description || ''
-              const photos = log.photo_urls && log.photo_urls.length > 0 
-                ? log.photo_urls 
-                : log.photo_url ? [log.photo_url] : []
+              const photos =
+                log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls : log.photo_url ? [log.photo_url] : []
 
               return (
                 <article
@@ -478,9 +371,7 @@ export default function DashboardPage() {
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                     <h4 className="text-lg font-bold text-slate-900">{log.title || '現場施工進度'}</h4>
-                    <time className="text-xs text-slate-400 font-medium">
-                      📅 {formatDate(log.created_at)}
-                    </time>
+                    <time className="text-xs text-slate-400 font-medium">📅 {formatDate(log.created_at)}</time>
                   </div>
 
                   {displayContent && (
@@ -519,7 +410,6 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      {/* 圖片放大預覽 */}
       {activeImage && (
         <div
           className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"

@@ -1,7 +1,8 @@
-import { createBrowserClient } from '@supabase/ssr'
-
-export const createClient = () =>
-  createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+/**
+ * Browser Supabase client removed from app data paths.
+ * All sensitive reads/writes go through server APIs with service role.
+ * This file is kept only so accidental imports fail loudly.
+ */
+export function createClient(): never {
+  throw new Error('Browser Supabase client disabled. Use server APIs instead.')
+}

@@ -26,18 +26,7 @@ export default function LoginNewPage() {
         throw new Error(data.error || '登入失敗，請確認電話與 PIN 碼')
       }
 
-      if (data.projectId) {
-        // 先完全清除舊快取
-        localStorage.clear()
-        
-        // 寫入當前登入帳號對應的唯一 ID
-        localStorage.setItem('client_project_id', data.projectId)
-
-        // 強制硬重載跳轉，破除 Next.js 快取
-        window.location.href = '/dashboard'
-      } else {
-        throw new Error('無法取得該單位的工程 ID')
-      }
+      window.location.href = '/dashboard'
     } catch (err: any) {
       setErrorMsg(err.message)
     } finally {
@@ -52,12 +41,8 @@ export default function LoginNewPage() {
           <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-100 text-blue-600 rounded-xl mb-2 text-xl font-bold">
             🏠
           </div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-            裝修工程進度查詢
-          </h1>
-          <p className="text-xs text-slate-500">
-            請輸入我們提供給您的電話號碼與 4 位數 PIN 碼
-          </p>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">裝修工程進度查詢</h1>
+          <p className="text-xs text-slate-500">請輸入我們提供給您的電話號碼與 4 位數 PIN 碼</p>
         </div>
 
         {errorMsg && (

@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase'
+import { INITIAL_STAGES } from '@/lib/stages'
 
 interface Project {
   id: string
   address: string
   access_code: string
   status: string
-  created_at: string
+  created_at?: string
 }
 
 interface PaymentPhase {
@@ -47,30 +47,18 @@ interface StageState {
   }
 }
 
-// 100% 精準對齊前台的 INITIAL_STAGES
-const INITIAL_STAGES = [
-  { category: '清拆工程', items: ['進場清拆', '清拆完成'] },
-  { category: '棚架工程', items: ['搭棚', '拆棚'] },
-  { category: '鋁窗工程', items: ['度尺', '拆舊窗', '換新窗', '封泥', '外部唧膠防水', '窗邊執修'] },
-  { category: '電力工程', items: ['夾位', 'MARK位', '介坑', '放喉', '穿線', '裝制面'] },
-  { category: '水喉工程', items: ['夾位', 'MARK位', '介坑', '放喉', '試水', '封泥'] },
-  { category: '泥水工程', items: ['間磚牆', '磚牆批盪', '廚房批盪', '浴室批盪', '盪地台', '起基仔', '廚房鋪磚', '浴室鋪磚', '客廳及房間鋪磚'] },
-  { category: '防水工程', items: ['清潔表面', '第一層防水塗層', '第二層防水塗層', '第三層防水塗層', '第四層防水塗層'] },
-  { category: '雲石工程', items: ['度尺', '裝雲石級咀'] },
-  { category: '油漆工程', items: ['剷底', '落批灰角', '批第一浸灰', '批第二浸灰', '批第三浸灰', '磨平牆身灰', '油第一浸面油', '油第二浸面油', '油第三浸面油'] }
-]
-
-const CATEGORIES = INITIAL_STAGES.map(s => s.category)
+const CATEGORIES = INITIAL_STAGES.map((s) => s.category)
 
 export default function AdminPage() {
+  const [authChecking, setAuthChecking] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [passwordInput, setPasswordInput] = useState('')
   const [loginError, setLoginError] = useState(false)
+  const [loginLoading, setLoginLoading] = useState(false)
 
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
 
-  // Payment Phases & Receipts
   const [currentPhase, setCurrentPhase] = useState<PaymentPhase | null>(null)
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [receiptCategory, setReceiptCategory] = useState(CATEGORIES[0])
@@ -80,35 +68,40 @@ export default function AdminPage() {
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false)
   const [receiptStatusMsg, setReceiptStatusMsg] = useState('')
 
-  // Progress Logs
   const [logs, setLogs] = useState<ProgressLog[]>([])
   const [logContent, setLogContent] = useState('')
   const [logFile, setLogFile] = useState<File | null>(null)
   const [isUploadingLog, setIsUploadingLog] = useState(false)
   const [logStatusMsg, setLogStatusMsg] = useState('')
 
-  // Stage States
   const [stageState, setStageState] = useState<StageState>({})
   const [isSavingStages, setIsSavingStages] = useState(false)
 
-  const supabase = createClient()
-
   useEffect(() => {
-    const auth = localStorage.getItem('admin_auth')
-    if (auth === 'true') {
-      setIsAuthenticated(true)
-      fetchProjects()
+    const check = async () => {
+      try {
+        const res = await fetch('/api/admin/check')
+        if (res.ok) {
+          setIsAuthenticated(true)
+          await fetchProjects()
+        }
+      } finally {
+        setAuthChecking(false)
+      }
     }
+    check()
   }, [])
 
   const fetchProjects = async () => {
-    const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false })
-    if (data && data.length > 0) {
-      setProjects(data)
-      if (!selectedProjectId) {
-        setSelectedProjectId(data[0].id)
-        loadProjectData(data[0].id)
-      }
+    const res = await fetch('/api/admin/projects')
+    if (!res.ok) return
+    const data = await res.json()
+    const list: Project[] = data.projects || []
+    setProjects(list)
+    if (list.length > 0) {
+      const nextId = selectedProjectId || list[0].id
+      if (!selectedProjectId) setSelectedProjectId(nextId)
+      await loadProjectData(nextId)
     }
   }
 
@@ -119,95 +112,47 @@ export default function AdminPage() {
     setReceiptStatusMsg('')
     setLogStatusMsg('')
 
-    fetchPhasesAndReceipts(projectId)
-    fetchStageState(projectId)
-    fetchProgressLogs(projectId)
-  }
-
-  const fetchPhasesAndReceipts = async (projectId: string) => {
-    let { data: phaseData } = await supabase
-      .from('payment_phases')
-      .select('*')
-      .eq('project_id', projectId)
-      .eq('status', 'pending')
-      .order('phase_number', { ascending: true })
-      .limit(1)
-
-    if (!phaseData || phaseData.length === 0) {
-      const { data: latestPhase } = await supabase
-        .from('payment_phases')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('phase_number', { ascending: false })
-        .limit(1)
-
-      const nextPhaseNum = latestPhase && latestPhase.length > 0 ? latestPhase[0].phase_number + 1 : 1
-
-      const { data: newPhase } = await supabase
-        .from('payment_phases')
-        .insert({ project_id: projectId, phase_number: nextPhaseNum, status: 'pending' })
-        .select()
-        .single()
-
-      if (newPhase) {
-        setCurrentPhase(newPhase)
-        fetchReceipts(newPhase.id)
-      }
-    } else {
-      setCurrentPhase(phaseData[0])
-      fetchReceipts(phaseData[0].id)
+    const res = await fetch(`/api/admin/projects/${projectId}/bundle`)
+    if (!res.ok) {
+      alert('載入工程資料失敗')
+      return
     }
+    const data = await res.json()
+    setCurrentPhase(data.currentPhase || null)
+    setReceipts(data.receipts || [])
+    setLogs(data.logs || [])
+    setStageState(data.stages_state || {})
   }
 
-  const fetchReceipts = async (phaseId: string) => {
-    const { data } = await supabase.from('receipts').select('*').eq('phase_id', phaseId).order('created_at', { ascending: false })
-    setReceipts(data || [])
-  }
-
-  const fetchProgressLogs = async (projectId: string) => {
-    const { data } = await supabase.from('progress_logs').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
-    setLogs(data || [])
-  }
-
-  const fetchStageState = async (projectId: string) => {
-    const { data } = await supabase.from('projects').select('stages_state').eq('id', projectId).single()
-
-    const defaultState: StageState = {}
-    INITIAL_STAGES.forEach(stage => {
-      defaultState[stage.category] = {
-        enabled: true,
-        items: stage.items.reduce((acc, item) => ({ ...acc, [item]: false }), {})
-      }
-    })
-
-    if (data && data.stages_state && Object.keys(data.stages_state).length > 0) {
-      const merged = { ...defaultState }
-      Object.keys(data.stages_state).forEach(cat => {
-        if (merged[cat]) {
-          merged[cat] = {
-            enabled: data.stages_state[cat].enabled ?? true,
-            items: {
-              ...merged[cat].items,
-              ...(data.stages_state[cat].items || {})
-            }
-          }
-        }
-      })
-      setStageState(merged)
-    } else {
-      setStageState(defaultState)
-    }
-  }
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (passwordInput === '64203981') {
-      localStorage.setItem('admin_auth', 'true')
+    setLoginLoading(true)
+    setLoginError(false)
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: passwordInput }),
+      })
+      if (!res.ok) {
+        setLoginError(true)
+        return
+      }
       setIsAuthenticated(true)
-      fetchProjects()
-    } else {
+      setPasswordInput('')
+      await fetchProjects()
+    } catch {
       setLoginError(true)
+    } finally {
+      setLoginLoading(false)
     }
+  }
+
+  const handleLogout = async () => {
+    await fetch('/api/admin/logout', { method: 'POST' })
+    setIsAuthenticated(false)
+    setProjects([])
+    setSelectedProjectId('')
   }
 
   const handleSelectProject = (projectId: string) => {
@@ -215,7 +160,6 @@ export default function AdminPage() {
     loadProjectData(projectId)
   }
 
-  // --- 單據管理 ---
   const handleAddReceipt = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedProjectId || !currentPhase || !receiptAmount) {
@@ -227,36 +171,23 @@ export default function AdminPage() {
     setReceiptStatusMsg('處理中...')
 
     try {
-      let photoUrl = ''
+      const form = new FormData()
+      form.set('projectId', selectedProjectId)
+      form.set('phaseId', currentPhase.id)
+      form.set('category', receiptCategory)
+      form.set('amount', receiptAmount)
+      form.set('description', receiptDescription)
+      if (receiptFile) form.set('file', receiptFile)
 
-      if (receiptFile) {
-        const fileExt = receiptFile.name.split('.').pop()
-        const fileName = `receipt_${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`
-        const filePath = `receipts/${fileName}`
-
-        const { error: uploadError } = await supabase.storage.from('progress-photos').upload(filePath, receiptFile)
-        if (uploadError) throw uploadError
-
-        const { data: publicUrlData } = supabase.storage.from('progress-photos').getPublicUrl(filePath)
-        photoUrl = publicUrlData.publicUrl
-      }
-
-      const { error: insertError } = await supabase.from('receipts').insert({
-        project_id: selectedProjectId,
-        phase_id: currentPhase.id,
-        category: receiptCategory,
-        amount: parseFloat(receiptAmount),
-        description: receiptDescription,
-        photo_url: photoUrl
-      })
-
-      if (insertError) throw insertError
+      const res = await fetch('/api/admin/receipts', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '新增失敗')
 
       setReceiptStatusMsg('✅ 單據新增成功！')
       setReceiptAmount('')
       setReceiptDescription('')
       setReceiptFile(null)
-      fetchReceipts(currentPhase.id)
+      await loadProjectData(selectedProjectId)
     } catch (err: any) {
       setReceiptStatusMsg(`❌ 新增失敗: ${err.message || '未知錯誤'}`)
     } finally {
@@ -267,23 +198,36 @@ export default function AdminPage() {
   const handleDeleteReceipt = async (receiptId: string) => {
     if (!confirm('確定要刪除這筆單據嗎？')) return
 
-    const { error } = await supabase.from('receipts').delete().eq('id', receiptId)
-    if (error) {
-      alert(`刪除失敗: ${error.message}`)
-    } else {
-      if (currentPhase) fetchReceipts(currentPhase.id)
+    const res = await fetch('/api/admin/receipts', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: receiptId }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      alert(`刪除失敗: ${data.error || '未知錯誤'}`)
+      return
     }
+    await loadProjectData(selectedProjectId)
   }
 
   const handleConfirmPhasePayment = async () => {
-    if (!currentPhase) return
+    if (!currentPhase || !selectedProjectId) return
     if (!confirm(`確定第 ${currentPhase.phase_number} 期已收到所有款項並開展下一期？`)) return
 
-    await supabase.from('payment_phases').update({ status: 'paid', paid_at: new Date().toISOString() }).eq('id', currentPhase.id)
-    fetchPhasesAndReceipts(selectedProjectId)
+    const res = await fetch('/api/admin/phases/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phaseId: currentPhase.id, projectId: selectedProjectId }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      alert(data.error || '操作失敗')
+      return
+    }
+    await loadProjectData(selectedProjectId)
   }
 
-  // --- 施工動態管理（修復欄位名稱） ---
   const handleAddProgressLog = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedProjectId || !logContent) {
@@ -295,34 +239,19 @@ export default function AdminPage() {
     setLogStatusMsg('處理中...')
 
     try {
-      let photoUrl = ''
+      const form = new FormData()
+      form.set('projectId', selectedProjectId)
+      form.set('description', logContent)
+      if (logFile) form.set('file', logFile)
 
-      if (logFile) {
-        const fileExt = logFile.name.split('.').pop()
-        const fileName = `log_${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`
-        const filePath = `logs/${fileName}`
-
-        const { error: uploadError } = await supabase.storage.from('progress-photos').upload(filePath, logFile)
-        if (uploadError) throw uploadError
-
-        const { data: publicUrlData } = supabase.storage.from('progress-photos').getPublicUrl(filePath)
-        photoUrl = publicUrlData.publicUrl
-      }
-
-      // 對齊 Supabase 資料庫欄位: title, description, photo_urls
-      const { error: insertError } = await supabase.from('progress_logs').insert({
-        project_id: selectedProjectId,
-        title: '現場施工進度',
-        description: logContent,
-        photo_urls: photoUrl ? [photoUrl] : []
-      })
-
-      if (insertError) throw insertError
+      const res = await fetch('/api/admin/logs', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '新增失敗')
 
       setLogStatusMsg('✅ 施工動態新增成功！')
       setLogContent('')
       setLogFile(null)
-      fetchProgressLogs(selectedProjectId)
+      await loadProjectData(selectedProjectId)
     } catch (err: any) {
       setLogStatusMsg(`❌ 新增失敗: ${err.message || '未知錯誤'}`)
     } finally {
@@ -333,25 +262,29 @@ export default function AdminPage() {
   const handleDeleteLog = async (logId: string) => {
     if (!confirm('確定要刪除這條施工動態嗎？')) return
 
-    const { error } = await supabase.from('progress_logs').delete().eq('id', logId)
-    if (error) {
-      alert(`刪除失敗: ${error.message}`)
-    } else {
-      fetchProgressLogs(selectedProjectId)
+    const res = await fetch('/api/admin/logs', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: logId }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      alert(`刪除失敗: ${data.error || '未知錯誤'}`)
+      return
     }
+    await loadProjectData(selectedProjectId)
   }
 
-  // --- 工序項目切換（儲存至 Supabase） ---
   const handleToggleCategory = async (category: string) => {
     const updated = {
       ...stageState,
       [category]: {
         ...stageState[category],
-        enabled: !stageState[category]?.enabled
-      }
+        enabled: !stageState[category]?.enabled,
+      },
     }
     setStageState(updated)
-    saveStagesToSupabase(updated)
+    saveStages(updated)
   }
 
   const handleToggleStageItem = async (category: string, item: string) => {
@@ -361,28 +294,35 @@ export default function AdminPage() {
         ...stageState[category],
         items: {
           ...stageState[category]?.items,
-          [item]: !stageState[category]?.items?.[item]
-        }
-      }
+          [item]: !stageState[category]?.items?.[item],
+        },
+      },
     }
     setStageState(updated)
-    saveStagesToSupabase(updated)
+    saveStages(updated)
   }
 
-  const saveStagesToSupabase = async (updatedState: StageState) => {
+  const saveStages = async (updatedState: StageState) => {
+    if (!selectedProjectId) return
     setIsSavingStages(true)
-    const { error } = await supabase
-      .from('projects')
-      .update({ 
-        stages_state: updatedState,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', selectedProjectId)
-
-    if (error) {
-      alert(`同步失敗: ${error.message}`)
+    const res = await fetch('/api/admin/stages', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: selectedProjectId, stages_state: updatedState }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      alert(`同步失敗: ${data.error || '未知錯誤'}`)
     }
     setIsSavingStages(false)
+  }
+
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white text-sm">
+        驗證登入狀態中...
+      </div>
+    )
   }
 
   if (!isAuthenticated) {
@@ -398,8 +338,12 @@ export default function AdminPage() {
             className="w-full p-2.5 border rounded-lg text-slate-900 text-sm font-bold"
           />
           {loginError && <p className="text-xs text-red-500 text-center font-bold">密碼錯誤，請重新輸入</p>}
-          <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-bold">
-            登入系統
+          <button
+            type="submit"
+            disabled={loginLoading}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-bold disabled:opacity-50"
+          >
+            {loginLoading ? '登入中...' : '登入系統'}
           </button>
         </form>
       </div>
@@ -409,22 +353,16 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-100 p-4 sm:p-6 text-slate-900 font-sans">
       <div className="max-w-4xl mx-auto space-y-6">
-
-        {/* Header */}
         <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <h1 className="text-xl font-bold text-slate-900">Admin 工程管理後台</h1>
           <button
-            onClick={() => {
-              localStorage.removeItem('admin_auth')
-              setIsAuthenticated(false)
-            }}
+            onClick={handleLogout}
             className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-lg transition"
           >
             登出系統
           </button>
         </div>
 
-        {/* 選擇工程單位 */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-2">
           <label className="text-xs font-bold text-slate-700 block">選擇工程單位：</label>
           <select
@@ -440,11 +378,8 @@ export default function AdminPage() {
           </select>
         </div>
 
-        {/* 📸 上傳施工動態紀錄 */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            📸 新增施工動態紀錄
-          </h2>
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">📸 新增施工動態紀錄</h2>
 
           <form onSubmit={handleAddProgressLog} className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <div>
@@ -484,7 +419,6 @@ export default function AdminPage() {
             )}
           </form>
 
-          {/* 已發佈動態列表 */}
           <div className="space-y-3 pt-2">
             <h3 className="text-sm font-bold text-slate-900">歷史施工動態紀錄 ({logs.length} 筆)</h3>
             {logs.length === 0 ? (
@@ -492,11 +426,15 @@ export default function AdminPage() {
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                 {logs.map((log) => {
-                  const imgUrl = (log.photo_urls && log.photo_urls.length > 0) ? log.photo_urls[0] : (log.photo_url || null)
+                  const imgUrl =
+                    log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls[0] : log.photo_url || null
                   const text = log.description || log.content || ''
 
                   return (
-                    <div key={log.id} className="flex justify-between items-start bg-white p-3 rounded-lg border border-slate-200 shadow-sm gap-3">
+                    <div
+                      key={log.id}
+                      className="flex justify-between items-start bg-white p-3 rounded-lg border border-slate-200 shadow-sm gap-3"
+                    >
                       <div className="flex gap-3 items-start">
                         {imgUrl && (
                           <img src={imgUrl} alt="Progress" className="w-12 h-12 object-cover rounded-md border flex-shrink-0" />
@@ -520,13 +458,10 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* 📑 材料收費區管理 */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b pb-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                📑 材料收費區管理
-              </h2>
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">📑 材料收費區管理</h2>
               <p className="text-xs font-bold text-blue-600 mt-0.5">
                 當前階段：第 {currentPhase?.phase_number || 1} 期收款
               </p>
@@ -539,7 +474,6 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* 新增單據表單 */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
             <h3 className="text-sm font-bold text-slate-900">
               新增材料單據（屬於第 {currentPhase?.phase_number || 1} 期）
@@ -605,25 +539,29 @@ export default function AdminPage() {
               </button>
 
               {receiptStatusMsg && (
-                <p className={`text-xs font-bold text-center ${receiptStatusMsg.includes('❌') ? 'text-red-500' : 'text-emerald-600'}`}>
+                <p
+                  className={`text-xs font-bold text-center ${
+                    receiptStatusMsg.includes('❌') ? 'text-red-500' : 'text-emerald-600'
+                  }`}
+                >
                   {receiptStatusMsg}
                 </p>
               )}
             </form>
           </div>
 
-          {/* 本期已新增單據列表 */}
           <div className="space-y-3">
-            <h3 className="text-sm font-bold text-slate-900">
-              本期已新增單據 ({receipts.length} 筆)
-            </h3>
+            <h3 className="text-sm font-bold text-slate-900">本期已新增單據 ({receipts.length} 筆)</h3>
 
             {receipts.length === 0 ? (
               <p className="text-xs font-bold text-slate-500 italic">本期暫無單據</p>
             ) : (
               <div className="space-y-2">
                 {receipts.map((r) => (
-                  <div key={r.id} className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                  <div
+                    key={r.id}
+                    className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-sm"
+                  >
                     <div className="flex items-center gap-3">
                       {r.photo_url ? (
                         <img src={r.photo_url} alt="Receipt" className="w-10 h-10 object-cover rounded-md border" />
@@ -636,16 +574,12 @@ export default function AdminPage() {
                         <p className="text-sm font-bold text-slate-900">
                           <span className="text-blue-600">[{r.category}]</span> {r.description || '無備註'}
                         </p>
-                        <p className="text-xs font-bold text-slate-500">
-                          {new Date(r.created_at).toLocaleDateString()}
-                        </p>
+                        <p className="text-xs font-bold text-slate-500">{new Date(r.created_at).toLocaleDateString()}</p>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4">
-                      <span className="text-base font-extrabold text-slate-900">
-                        HK$ {r.amount}
-                      </span>
+                      <span className="text-base font-extrabold text-slate-900">HK$ {r.amount}</span>
                       <button
                         onClick={() => handleDeleteReceipt(r.id)}
                         className="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-600 text-xs font-bold rounded transition"
@@ -660,7 +594,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* 📋 各項工序完成度明細 */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-bold text-slate-900">📋 各項工序完成度明細</h2>
@@ -717,7 +650,6 @@ export default function AdminPage() {
             })}
           </div>
         </div>
-
       </div>
     </div>
   )
