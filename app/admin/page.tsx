@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { INITIAL_STAGES } from '@/lib/stages'
 
 interface Project {
   id: string
@@ -43,19 +44,6 @@ interface StageState {
     items: { [item: string]: boolean }
   }
 }
-
-// 100% 精準對齊前台的 INITIAL_STAGES
-const INITIAL_STAGES = [
-  { category: '清拆工程', items: ['進場清拆', '清拆完成'] },
-  { category: '棚架工程', items: ['搭棚', '拆棚'] },
-  { category: '鋁窗工程', items: ['度尺', '拆舊窗', '換新窗', '封泥', '外部唧膠防水', '窗邊執修'] },
-  { category: '電力工程', items: ['夾位', 'MARK位', '介坑', '放喉', '穿線', '裝制面'] },
-  { category: '水喉工程', items: ['夾位', 'MARK位', '介坑', '放喉', '試水', '封泥'] },
-  { category: '泥水工程', items: ['間磚牆', '磚牆批盪', '廚房批盪', '浴室批盪', '盪地台', '起基仔', '廚房鋪磚', '浴室鋪磚', '客廳及房間鋪磚'] },
-  { category: '防水工程', items: ['清潔表面', '第一層防水塗層', '第二層防水塗層', '第三層防水塗層', '第四層防水塗層'] },
-  { category: '雲石工程', items: ['度尺', '裝雲石級咀'] },
-  { category: '油漆工程', items: ['剷底', '落批灰角', '批第一浸灰', '批第二浸灰', '批第三浸灰', '磨平牆身灰', '油第一浸面油', '油第二浸面油', '油第三浸面油'] }
-]
 
 const CATEGORIES = INITIAL_STAGES.map(s => s.category)
 
@@ -650,7 +638,7 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* 📋 各項工序完成度明細（同步客戶端） */}
+        {/* 📋 各項工序完成度明細 */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-bold text-slate-900">📋 各項工序完成度明細</h2>

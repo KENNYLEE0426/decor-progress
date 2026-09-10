@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { INITIAL_STAGES } from '@/lib/stages'
 
 interface ProgressLog {
   id: string
@@ -37,18 +38,6 @@ interface Receipt {
   phase_id: string
   created_at: string
 }
-
-const INITIAL_STAGES = [
-  { category: '清拆工程', items: ['進場清拆', '清拆完成'] },
-  { category: '棚架工程', items: ['搭棚', '拆棚'] },
-  { category: '鋁窗工程', items: ['度尺', '拆舊窗', '換新窗', '封泥', '外部唧膠防水', '窗邊執修'] },
-  { category: '電力工程', items: ['夾位', 'MARK位', '介坑', '放喉', '穿線', '裝制面'] },
-  { category: '水喉工程', items: ['夾位', 'MARK位', '介坑', '放喉', '試水', '封泥'] },
-  { category: '泥水工程', items: ['間磚牆', '磚牆批盪', '廚房批盪', '浴室批盪', '盪地台', '起基仔', '廚房鋪磚', '浴室鋪磚', '客廳及房間鋪磚'] },
-  { category: '防水工程', items: ['清潔表面', '第一層防水塗層', '第二層防水塗層', '第三層防水塗層', '第四層防水塗層'] },
-  { category: '雲石工程', items: ['度尺', '裝雲石級咀'] },
-  { category: '油漆工程', items: ['剷底', '落批灰角', '批第一浸灰', '批第二浸灰', '批第三浸灰', '磨平牆身灰', '油第一浸面油', '油第二浸面油', '油第三浸面油'] }
-]
 
 export default function DashboardPage() {
   const [project, setProject] = useState<Project | null>(null)
@@ -205,16 +194,13 @@ export default function DashboardPage() {
     })
   }
 
-  // 精準對齊後台資料結構，同時兼顧向後相容
   const isItemChecked = (category: string, item: string, state: Record<string, any>) => {
     if (!state) return false
 
-    // 後台標準結構：state[category].items[item]
     if (state[category]?.items?.[item] !== undefined) {
       return Boolean(state[category].items[item])
     }
 
-    // 舊版平面 key 相容 fallback
     const fullKey = `${category}-${item}`
     const val = state[fullKey] !== undefined ? state[fullKey] : state[item]
     return val === true || val === 'true' || val === 1 || val === '1'
@@ -233,7 +219,6 @@ export default function DashboardPage() {
 
   const stagesState = project?.stages_state || {}
 
-  // 根據所有勾選項自動計算整體完成度 %
   let totalStageItemsCount = 0
   let completedStageItemsCount = 0
 
@@ -536,7 +521,7 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      {/* 圖片預覽彈窗 */}
+      {/* 圖片放大預覽 */}
       {activeImage && (
         <div
           className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
