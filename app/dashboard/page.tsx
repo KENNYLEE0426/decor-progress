@@ -55,6 +55,7 @@ export default function DashboardPage() {
   const [activeImage, setActiveImage] = useState<string | null>(null)
   const [showStageDetails, setShowStageDetails] = useState(true)
 
+  // 材料收費 UI 狀態
   const [showReceipts, setShowReceipts] = useState(true)
   const [phases, setPhases] = useState<PaymentPhase[]>([])
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>('')
@@ -74,11 +75,7 @@ export default function DashboardPage() {
       .eq('id', projectId)
       .single()
 
-    if (projectData) {
-      console.log('成功從 Supabase 讀取 Project 資料:', projectData)
-      console.log('當前 stages_state 內容為:', projectData.stages_state)
-      setProject(projectData)
-    }
+    if (projectData) setProject(projectData)
 
     const { data: logData } = await supabase
       .from('progress_logs')
@@ -111,7 +108,6 @@ export default function DashboardPage() {
             { event: '*', schema: 'public', table: 'projects', filter: `id=eq.${projectId}` },
             (payload: any) => {
               if (payload.new) {
-                console.log('Realtime 收到 Projects 更新:', payload.new)
                 setProject(payload.new as Project)
               }
             }
@@ -207,20 +203,16 @@ export default function DashboardPage() {
     })
   }
 
-  // 核心解讀邏輯：兼容雙向資料結構（Nested Object 與 Flat Key）
-  const checkIsItemChecked = (category: string, item: string) => {
-    if (!project?.stages_state) return false
-    const state = project.stages_state
+  // 💡 通用勾選檢查函式：相容後台各種 JSON Key 與型態格式
+  const isItemChecked = (category: string, item: string, state: Record<string, any>) => {
+    if (!state) return false
+    
+    // 檢查複合 Key：例如 "清拆工程-進場清拆"
+    const fullKey = `${category}-${item}`
+    // 檢查單獨 Key：例如 "進場清拆"
+    const val = state[fullKey] !== undefined ? state[fullKey] : state[item]
 
-    // 1. 檢查 Nested 結構：state['棚架工程']['搭棚']
-    if (state[category] && typeof state[category] === 'object') {
-      if (state[category][item] === true) return true
-    }
-
-    // 2. 檢查 Flat 結構：state['棚架工程-搭棚']
-    const flatKey = `${category}-${item}`
-    if (state[flatKey] === true) return true
-
+    if (val === true || val === 'true' || val === 1 || val === '1') return true
     return false
   }
 
@@ -236,6 +228,7 @@ export default function DashboardPage() {
   }
 
   const currentProgress = logs.length > 0 ? logs[0].progress_percent : 0
+  const stagesState = project?.stages_state || {}
 
   const totalAmount = receipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
   const currentSelectedPhase = phases.find(p => p.id === selectedPhaseId)
@@ -281,7 +274,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 材料收費區 */}
+            {/* 🧾 材料收費區 */}
             <div className="pt-2 border-t border-slate-100">
               <button
                 type="button"
@@ -395,8 +388,13 @@ export default function DashboardPage() {
               {showStageDetails && (
                 <div className="mt-4 space-y-4 max-h-[500px] overflow-y-auto pr-1">
                   {INITIAL_STAGES.map((stage) => {
+                    const catKey = `CATEGORY_ENABLED-${stage.category}`
+                    const isCategoryEnabled = stagesState[catKey] !== false
+
+                    if (!isCategoryEnabled) return null
+
                     const categoryCompletedCount = stage.items.filter((item) =>
-                      checkIsItemChecked(stage.category, item)
+                      isItemChecked(stage.category, item, stagesState)
                     ).length
 
                     const isFullyCompleted = categoryCompletedCount === stage.items.length
@@ -420,7 +418,7 @@ export default function DashboardPage() {
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {stage.items.map((item) => {
-                            const isChecked = checkIsItemChecked(stage.category, item)
+                            const isChecked = isItemChecked(stage.category, item, stagesState)
 
                             return (
                               <div
