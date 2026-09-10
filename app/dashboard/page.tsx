@@ -41,8 +41,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [activeImage, setActiveImage] = useState<string | null>(null)
   const [showStageDetails, setShowStageDetails] = useState(true)
-
   const [showReceipts, setShowReceipts] = useState(true)
+  const [showLogsSection, setShowLogsSection] = useState(true)
+  const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
   const [phases, setPhases] = useState<PaymentPhase[]>([])
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>('')
   const [receipts, setReceipts] = useState<Receipt[]>([])
@@ -62,11 +63,19 @@ export default function DashboardPage() {
       throw new Error('載入失敗')
     }
     const data = await res.json()
+    const nextLogs: ProgressLog[] = data.logs || []
     setProject(data.project)
-    setLogs(data.logs || [])
+    setLogs(nextLogs)
     setPhases(data.phases || [])
     setSelectedPhaseId(data.selectedPhaseId || '')
     setReceipts(data.receipts || [])
+    setExpandedLogIds((prev) => {
+      if (prev.size > 0) {
+        const valid = new Set([...prev].filter((id) => nextLogs.some((l) => l.id === id)))
+        if (valid.size > 0) return valid
+      }
+      return nextLogs[0] ? new Set([nextLogs[0].id]) : new Set()
+    })
   }
 
   useEffect(() => {
@@ -101,18 +110,29 @@ export default function DashboardPage() {
     })
   }
 
-  // 只認 stages_state[category].items[item]，避免舊 flat key / 跨類同名誤判
   const isItemChecked = (category: string, item: string, state: Record<string, any>) => {
     if (!state?.[category]?.items) return false
     return state[category].items[item] === true
   }
 
+  const toggleLog = (id: string) => {
+    setExpandedLogIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const expandAllLogs = () => setExpandedLogIds(new Set(logs.map((l) => l.id)))
+  const collapseAllLogs = () => setExpandedLogIds(new Set())
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center space-y-3">
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-slate-500 font-medium">正在載入施工日誌...</p>
+      <div className="min-h-screen bg-[#f3f1ee] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 border-2 border-stone-800 border-t-transparent rounded-full animate-spin" />
+          <p className="text-stone-500 text-sm tracking-wide">載入工程資料中</p>
         </div>
       </div>
     )
@@ -142,66 +162,68 @@ export default function DashboardPage() {
   const currentSelectedPhase = phases.find((p) => p.id === selectedPhaseId)
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 pb-16">
-      <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-40">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+    <div className="min-h-screen bg-[#f3f1ee] text-stone-800 pb-16">
+      <header className="bg-[#1c1917] text-stone-100 sticky top-0 z-40 border-b border-stone-700/60">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center gap-4">
           <div>
-            <h1 className="text-xl font-bold tracking-wide">裝修工程進度查詢</h1>
-            <p className="text-xs text-slate-400 mt-0.5">即時施工日誌與現場照片</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-teal-400/90 font-medium">Progress Portal</p>
+            <h1 className="text-lg sm:text-xl font-semibold tracking-wide mt-0.5">裝修工程進度查詢</h1>
           </div>
           <button
             onClick={handleLogout}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition"
+            className="px-3 py-1.5 rounded-md text-xs font-medium border border-stone-600 text-stone-300 hover:bg-stone-800 hover:text-white transition"
           >
-            登出頁面
+            登出
           </button>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 mt-6 space-y-6">
+      <main className="max-w-4xl mx-auto px-4 mt-6 space-y-5">
         {project && (
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
-              <div>
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">工程單位</span>
-                <h2 className="text-2xl font-bold text-slate-900 mt-0.5">{project.address}</h2>
+          <section className="bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
+            <div className="px-5 sm:px-6 py-5 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50">
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div>
+                  <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-400">工程單位</span>
+                  <h2 className="text-xl sm:text-2xl font-semibold text-stone-900 mt-1 leading-snug">
+                    {project.address}
+                  </h2>
+                </div>
+                <div className="sm:text-right">
+                  <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-400">整體進度</span>
+                  <p className="text-3xl font-semibold tabular-nums text-teal-800 mt-0.5">{currentProgress}%</p>
+                </div>
               </div>
-              <div className="text-right">
-                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">當前整體進度</span>
-                <p className="text-3xl font-extrabold text-blue-600">{currentProgress}%</p>
-              </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <div className="w-full bg-slate-100 h-3.5 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
+              <div className="mt-4 h-2 w-full rounded-full bg-stone-200 overflow-hidden">
                 <div
-                  className="bg-gradient-to-r from-blue-500 to-indigo-600 h-full rounded-full transition-all duration-700 ease-out shadow-sm"
+                  className="h-full rounded-full bg-teal-700 transition-all duration-700 ease-out"
                   style={{ width: `${currentProgress}%` }}
                 />
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-100">
+            <div className="px-5 sm:px-6 py-2 border-b border-stone-100">
               <button
                 type="button"
                 onClick={() => setShowReceipts(!showReceipts)}
-                className="w-full flex justify-between items-center py-2 text-sm font-bold text-slate-700 hover:text-blue-600 transition"
+                className="w-full flex justify-between items-center py-3 text-sm font-semibold text-stone-800 hover:text-teal-800 transition"
               >
-                <span className="flex items-center gap-2">🧾 材料收費明細</span>
-                <span className="text-xs bg-slate-100 px-2.5 py-1 rounded-full text-slate-500">
-                  {showReceipts ? '收起 ▲' : '展開 ▼'}
+                <span>材料收費明細</span>
+                <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2.5 py-1 rounded">
+                  {showReceipts ? '收起' : '展開'}
                 </span>
               </button>
 
               {showReceipts && (
-                <div className="mt-3 bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-4">
-                  <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-white p-3.5 rounded-lg border border-slate-200/80 shadow-sm">
+                <div className="pb-5 space-y-3">
+                  <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-stone-50 p-3.5 rounded-lg border border-stone-200">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-slate-500">期數選擇：</span>
+                      <span className="text-xs font-medium text-stone-500">期數</span>
                       <select
                         value={selectedPhaseId}
                         onChange={(e) => handlePhaseChange(e.target.value)}
-                        className="text-xs p-1.5 border rounded-md bg-slate-50 font-bold text-slate-700"
+                        className="text-xs p-1.5 border border-stone-300 rounded bg-white font-semibold text-stone-800"
                       >
                         {phases.map((p) => (
                           <option key={p.id} value={p.id}>
@@ -210,22 +232,21 @@ export default function DashboardPage() {
                         ))}
                       </select>
                     </div>
-
                     <div className="text-right">
-                      <span className="text-xs text-slate-400 block font-medium">本期材料總金額</span>
-                      <span className="text-xl font-extrabold text-emerald-600">
+                      <span className="text-[11px] text-stone-400 block">本期材料總額</span>
+                      <span className="text-lg font-semibold tabular-nums text-stone-900">
                         HK$ {totalAmount.toLocaleString()}
                       </span>
                     </div>
                   </div>
 
                   {currentSelectedPhase && (
-                    <div className="flex justify-between items-center text-xs px-1">
-                      <span className="text-slate-500">
-                        狀態：{currentSelectedPhase.status === 'paid' ? '🟢 已付清金額' : '⏳ 待付款 / 明細核對中'}
+                    <div className="flex justify-between items-center text-xs text-stone-500 px-0.5">
+                      <span>
+                        {currentSelectedPhase.status === 'paid' ? '狀態：已付清' : '狀態：待付款／核對中'}
                       </span>
                       {currentSelectedPhase.paid_at && (
-                        <span className="text-slate-400">
+                        <span>
                           清繳日期：{new Date(currentSelectedPhase.paid_at).toLocaleDateString('zh-HK')}
                         </span>
                       )}
@@ -234,12 +255,12 @@ export default function DashboardPage() {
 
                   <div className="space-y-2">
                     {receipts.length === 0 ? (
-                      <p className="text-xs text-slate-400 text-center py-4 italic">本期暫無材料單據紀錄</p>
+                      <p className="text-xs text-stone-400 text-center py-4">本期暫無材料單據</p>
                     ) : (
                       receipts.map((r) => (
                         <div
                           key={r.id}
-                          className="bg-white p-3 rounded-lg border border-slate-200/80 flex items-center justify-between gap-3 shadow-sm"
+                          className="bg-white p-3 rounded-lg border border-stone-200 flex items-center justify-between gap-3"
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             {r.photo_url ? (
@@ -247,22 +268,24 @@ export default function DashboardPage() {
                                 src={r.photo_url}
                                 alt="單據"
                                 onClick={() => setActiveImage(r.photo_url)}
-                                className="w-12 h-12 object-cover rounded-lg border cursor-pointer hover:opacity-80 transition flex-shrink-0"
+                                className="w-12 h-12 object-cover rounded-md border border-stone-200 cursor-pointer hover:opacity-80 transition flex-shrink-0"
                               />
                             ) : (
-                              <div className="w-12 h-12 bg-slate-100 rounded-lg border flex items-center justify-center text-slate-400 text-xs flex-shrink-0">
-                                無相片
+                              <div className="w-12 h-12 bg-stone-100 rounded-md border border-stone-200 flex items-center justify-center text-stone-400 text-[10px] flex-shrink-0">
+                                無圖
                               </div>
                             )}
                             <div className="min-w-0">
-                              <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 mb-1">
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-stone-100 text-stone-600 mb-1">
                                 {r.category}
                               </span>
-                              <p className="text-xs font-semibold text-slate-800 truncate">{r.description || '無描述'}</p>
-                              <p className="text-[10px] text-slate-400">{formatDate(r.created_at)}</p>
+                              <p className="text-xs font-medium text-stone-800 truncate">
+                                {r.description || '無描述'}
+                              </p>
+                              <p className="text-[10px] text-stone-400">{formatDate(r.created_at)}</p>
                             </div>
                           </div>
-                          <span className="text-sm font-extrabold text-slate-900 flex-shrink-0">
+                          <span className="text-sm font-semibold tabular-nums text-stone-900 flex-shrink-0">
                             HK$ {r.amount.toLocaleString()}
                           </span>
                         </div>
@@ -273,20 +296,20 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="pt-2 border-t border-slate-100">
+            <div className="px-5 sm:px-6 py-2">
               <button
                 type="button"
                 onClick={() => setShowStageDetails(!showStageDetails)}
-                className="w-full flex justify-between items-center py-2 text-sm font-bold text-slate-700 hover:text-blue-600 transition"
+                className="w-full flex justify-between items-center py-3 text-sm font-semibold text-stone-800 hover:text-teal-800 transition"
               >
-                <span className="flex items-center gap-2">📋 各項工序完成度明細</span>
-                <span className="text-xs bg-slate-100 px-2.5 py-1 rounded-full text-slate-500">
-                  {showStageDetails ? '收起 ▲' : '展開 ▼'}
+                <span>各項工序完成度</span>
+                <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2.5 py-1 rounded">
+                  {showStageDetails ? '收起' : '展開'}
                 </span>
               </button>
 
               {showStageDetails && (
-                <div className="mt-4 space-y-4 max-h-[500px] overflow-y-auto pr-1">
+                <div className="pb-5 space-y-3 max-h-[500px] overflow-y-auto pr-1">
                   {INITIAL_STAGES.map((stage) => {
                     const isCategoryEnabled = stagesState[stage.category]?.enabled ?? true
                     if (!isCategoryEnabled) return null
@@ -297,19 +320,19 @@ export default function DashboardPage() {
                     const isFullyCompleted = categoryCompletedCount === stage.items.length
 
                     return (
-                      <div key={stage.category} className="border border-slate-200/80 rounded-xl p-4 bg-slate-50/50">
+                      <div key={stage.category} className="border border-stone-200 rounded-lg p-4 bg-stone-50/70">
                         <div className="flex justify-between items-center mb-2.5">
-                          <span className="font-bold text-slate-800 text-sm">{stage.category}</span>
+                          <span className="font-semibold text-stone-800 text-sm">{stage.category}</span>
                           <span
-                            className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
+                            className={`text-[11px] px-2 py-0.5 rounded font-medium ${
                               isFullyCompleted
-                                ? 'bg-emerald-100 text-emerald-700'
+                                ? 'bg-teal-50 text-teal-800'
                                 : categoryCompletedCount > 0
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-slate-200 text-slate-500'
+                                  ? 'bg-amber-50 text-amber-800'
+                                  : 'bg-stone-200/80 text-stone-500'
                             }`}
                           >
-                            {categoryCompletedCount} / {stage.items.length} 完成
+                            {categoryCompletedCount} / {stage.items.length}
                           </span>
                         </div>
 
@@ -319,13 +342,17 @@ export default function DashboardPage() {
                             return (
                               <div
                                 key={item}
-                                className={`flex items-center gap-2 p-2 rounded-lg text-xs font-medium border transition ${
+                                className={`flex items-center gap-2 p-2 rounded-md text-xs font-medium border ${
                                   isChecked
-                                    ? 'bg-emerald-50/80 border-emerald-200 text-emerald-800 font-semibold'
-                                    : 'bg-white border-slate-200/80 text-slate-400'
+                                    ? 'bg-teal-50/90 border-teal-200 text-teal-900'
+                                    : 'bg-white border-stone-200 text-stone-400'
                                 }`}
                               >
-                                <span>{isChecked ? '🟢' : '⚪'}</span>
+                                <span
+                                  className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                    isChecked ? 'bg-teal-600' : 'bg-stone-300'
+                                  }`}
+                                />
                                 <span>{item}</span>
                               </div>
                             )
@@ -337,81 +364,152 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-          </div>
+          </section>
         )}
 
-        <div className="space-y-4">
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <span>施工動態紀錄</span>
-            <span className="text-xs font-normal text-slate-500">({logs.length} 筆更新)</span>
-          </h3>
+        <section className="bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
+          <div className="px-5 sm:px-6 py-3 border-b border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setShowLogsSection(!showLogsSection)}
+              className="flex items-center justify-between sm:justify-start gap-3 text-left"
+            >
+              <h3 className="text-base font-semibold text-stone-900">施工動態紀錄</h3>
+              <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
+                {logs.length} 筆
+              </span>
+            </button>
 
-          {logs.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center text-slate-400 border border-slate-200">
-              尚未發布任何施工日誌。
-            </div>
-          ) : (
-            logs.map((log) => {
-              const displayContent = log.description || ''
-              const photos = log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls : []
-
-              return (
-                <article
-                  key={log.id}
-                  className="bg-white rounded-2xl p-5 sm:p-6 shadow-sm border border-slate-200/80 transition hover:shadow-md space-y-4"
+            {showLogsSection && logs.length > 0 && (
+              <div className="flex items-center gap-2 text-[11px]">
+                <button
+                  type="button"
+                  onClick={expandAllLogs}
+                  className="px-2.5 py-1 rounded border border-stone-200 text-stone-600 hover:bg-stone-50 transition"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                    <h4 className="text-lg font-bold text-slate-900">{log.title || '現場施工進度'}</h4>
-                    <time className="text-xs text-slate-400 font-medium">📅 {formatDate(log.created_at)}</time>
-                  </div>
+                  全部展開
+                </button>
+                <button
+                  type="button"
+                  onClick={collapseAllLogs}
+                  className="px-2.5 py-1 rounded border border-stone-200 text-stone-600 hover:bg-stone-50 transition"
+                >
+                  全部收起
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowLogsSection(false)}
+                  className="px-2.5 py-1 rounded bg-stone-100 text-stone-600 hover:bg-stone-200 transition sm:hidden"
+                >
+                  收起區塊
+                </button>
+              </div>
+            )}
 
-                  {displayContent && (
-                    <p className="text-slate-600 text-sm leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-100 whitespace-pre-line">
-                      {displayContent}
-                    </p>
-                  )}
+            {!showLogsSection && (
+              <button
+                type="button"
+                onClick={() => setShowLogsSection(true)}
+                className="text-[11px] font-medium text-teal-800 hover:underline self-start sm:self-auto"
+              >
+                展開區塊
+              </button>
+            )}
+          </div>
 
-                  {photos.length > 0 && (
-                    <div className="space-y-2">
-                      <span className="text-xs font-semibold text-slate-400 tracking-wider">
-                        施工現場照片 ({photos.length} 張)
-                      </span>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                        {photos.map((url, index) => (
-                          <div
-                            key={index}
-                            onClick={() => setActiveImage(url)}
-                            className="group relative aspect-square bg-slate-100 rounded-xl overflow-hidden cursor-pointer border border-slate-200/60 shadow-sm hover:opacity-95 transition"
-                          >
-                            <img
-                              src={url}
-                              alt={`施工照片 ${index + 1}`}
-                              className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                              loading="lazy"
-                            />
+          {showLogsSection && (
+            <div className="divide-y divide-stone-100">
+              {logs.length === 0 ? (
+                <div className="px-5 py-10 text-center text-sm text-stone-400">尚未發布任何施工日誌</div>
+              ) : (
+                logs.map((log) => {
+                  const displayContent = log.description || ''
+                  const photos = log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls : []
+                  const isOpen = expandedLogIds.has(log.id)
+                  const preview =
+                    displayContent.length > 48 ? `${displayContent.slice(0, 48)}…` : displayContent
+
+                  return (
+                    <article key={log.id} className="bg-white">
+                      <button
+                        type="button"
+                        onClick={() => toggleLog(log.id)}
+                        className="w-full px-5 sm:px-6 py-4 flex items-start justify-between gap-3 text-left hover:bg-stone-50/80 transition"
+                      >
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <h4 className="text-sm font-semibold text-stone-900">
+                              {log.title || '現場施工進度'}
+                            </h4>
+                            <time className="text-[11px] text-stone-400 tabular-nums">
+                              {formatDate(log.created_at)}
+                            </time>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </article>
-              )
-            })
+                          {!isOpen && (
+                            <p className="text-xs text-stone-500 truncate">
+                              {preview || (photos.length > 0 ? `${photos.length} 張現場照片` : '無內容摘要')}
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-[11px] font-medium text-stone-500 mt-0.5 flex-shrink-0">
+                          {isOpen ? '收起' : '展開'}
+                        </span>
+                      </button>
+
+                      {isOpen && (
+                        <div className="px-5 sm:px-6 pb-5 space-y-3">
+                          {displayContent && (
+                            <p className="text-sm leading-relaxed text-stone-600 bg-stone-50 p-3.5 rounded-lg border border-stone-100 whitespace-pre-line">
+                              {displayContent}
+                            </p>
+                          )}
+
+                          {photos.length > 0 && (
+                            <div className="space-y-2">
+                              <span className="text-[11px] font-medium uppercase tracking-wider text-stone-400">
+                                現場照片 · {photos.length}
+                              </span>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                                {photos.map((url, index) => (
+                                  <button
+                                    key={index}
+                                    type="button"
+                                    onClick={() => setActiveImage(url)}
+                                    className="relative aspect-square bg-stone-100 rounded-lg overflow-hidden border border-stone-200 hover:opacity-90 transition"
+                                  >
+                                    <img
+                                      src={url}
+                                      alt={`施工照片 ${index + 1}`}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </article>
+                  )
+                })
+              )}
+            </div>
           )}
-        </div>
+        </section>
       </main>
 
       {activeImage && (
         <div
-          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+          className="fixed inset-0 z-50 bg-stone-950/90 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={() => setActiveImage(null)}
         >
           <div className="relative max-w-4xl max-h-[90vh] w-full flex flex-col items-center justify-center">
             <button
               onClick={() => setActiveImage(null)}
-              className="absolute -top-12 right-0 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-sm transition"
+              className="absolute -top-12 right-0 text-stone-200 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-md text-sm transition"
             >
-              ✕ 關閉
+              關閉
             </button>
             <img
               src={activeImage}
