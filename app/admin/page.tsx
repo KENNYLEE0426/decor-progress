@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { INITIAL_STAGES } from '@/lib/stages'
 
 interface Project {
   id: string
@@ -33,8 +32,11 @@ interface Receipt {
 interface ProgressLog {
   id: string
   project_id: string
-  content: string
-  photo_url: string | null
+  title?: string
+  description?: string
+  content?: string
+  photo_url?: string | null
+  photo_urls?: string[]
   created_at: string
 }
 
@@ -44,6 +46,19 @@ interface StageState {
     items: { [item: string]: boolean }
   }
 }
+
+// 100% 精準對齊前台的 INITIAL_STAGES
+const INITIAL_STAGES = [
+  { category: '清拆工程', items: ['進場清拆', '清拆完成'] },
+  { category: '棚架工程', items: ['搭棚', '拆棚'] },
+  { category: '鋁窗工程', items: ['度尺', '拆舊窗', '換新窗', '封泥', '外部唧膠防水', '窗邊執修'] },
+  { category: '電力工程', items: ['夾位', 'MARK位', '介坑', '放喉', '穿線', '裝制面'] },
+  { category: '水喉工程', items: ['夾位', 'MARK位', '介坑', '放喉', '試水', '封泥'] },
+  { category: '泥水工程', items: ['間磚牆', '磚牆批盪', '廚房批盪', '浴室批盪', '盪地台', '起基仔', '廚房鋪磚', '浴室鋪磚', '客廳及房間鋪磚'] },
+  { category: '防水工程', items: ['清潔表面', '第一層防水塗層', '第二層防水塗層', '第三層防水塗層', '第四層防水塗層'] },
+  { category: '雲石工程', items: ['度尺', '裝雲石級咀'] },
+  { category: '油漆工程', items: ['剷底', '落批灰角', '批第一浸灰', '批第二浸灰', '批第三浸灰', '磨平牆身灰', '油第一浸面油', '油第二浸面油', '油第三浸面油'] }
+]
 
 const CATEGORIES = INITIAL_STAGES.map(s => s.category)
 
@@ -268,7 +283,7 @@ export default function AdminPage() {
     fetchPhasesAndReceipts(selectedProjectId)
   }
 
-  // --- 施工動態管理 ---
+  // --- 施工動態管理（修復欄位名稱） ---
   const handleAddProgressLog = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedProjectId || !logContent) {
@@ -294,10 +309,12 @@ export default function AdminPage() {
         photoUrl = publicUrlData.publicUrl
       }
 
+      // 對齊 Supabase 資料庫欄位: title, description, photo_urls
       const { error: insertError } = await supabase.from('progress_logs').insert({
         project_id: selectedProjectId,
-        content: logContent,
-        photo_url: photoUrl
+        title: '現場施工進度',
+        description: logContent,
+        photo_urls: photoUrl ? [photoUrl] : []
       })
 
       if (insertError) throw insertError
@@ -474,25 +491,30 @@ export default function AdminPage() {
               <p className="text-xs font-bold text-slate-500 italic">暫無施工紀錄</p>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {logs.map((log) => (
-                  <div key={log.id} className="flex justify-between items-start bg-white p-3 rounded-lg border border-slate-200 shadow-sm gap-3">
-                    <div className="flex gap-3 items-start">
-                      {log.photo_url && (
-                        <img src={log.photo_url} alt="Progress" className="w-12 h-12 object-cover rounded-md border flex-shrink-0" />
-                      )}
-                      <div>
-                        <p className="text-sm font-bold text-slate-900 whitespace-pre-wrap">{log.content}</p>
-                        <p className="text-xs font-bold text-slate-400 mt-1">{new Date(log.created_at).toLocaleString()}</p>
+                {logs.map((log) => {
+                  const imgUrl = (log.photo_urls && log.photo_urls.length > 0) ? log.photo_urls[0] : (log.photo_url || null)
+                  const text = log.description || log.content || ''
+
+                  return (
+                    <div key={log.id} className="flex justify-between items-start bg-white p-3 rounded-lg border border-slate-200 shadow-sm gap-3">
+                      <div className="flex gap-3 items-start">
+                        {imgUrl && (
+                          <img src={imgUrl} alt="Progress" className="w-12 h-12 object-cover rounded-md border flex-shrink-0" />
+                        )}
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 whitespace-pre-wrap">{text}</p>
+                          <p className="text-xs font-bold text-slate-400 mt-1">{new Date(log.created_at).toLocaleString()}</p>
+                        </div>
                       </div>
+                      <button
+                        onClick={() => handleDeleteLog(log.id)}
+                        className="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-600 text-xs font-bold rounded transition flex-shrink-0"
+                      >
+                        刪除
+                      </button>
                     </div>
-                    <button
-                      onClick={() => handleDeleteLog(log.id)}
-                      className="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-600 text-xs font-bold rounded transition flex-shrink-0"
-                    >
-                      刪除
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
