@@ -47,6 +47,18 @@ interface StageState {
 
 const CATEGORIES = INITIAL_STAGES.map((s) => s.category)
 
+const inputClass =
+  'w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm text-stone-900 placeholder-stone-400 bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/30 focus:border-teal-700 transition'
+const labelClass = 'block text-[11px] font-medium uppercase tracking-[0.12em] text-stone-500 mb-1.5'
+const cardClass =
+  'bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden'
+const primaryBtnClass =
+  'w-full bg-[#1c1917] hover:bg-stone-800 disabled:opacity-60 text-stone-50 font-semibold py-2.5 rounded-lg transition text-sm'
+const secondaryBtnClass =
+  'bg-teal-800 hover:bg-teal-900 disabled:opacity-60 text-white text-xs font-semibold px-4 py-2 rounded-lg transition'
+const dangerBtnClass =
+  'px-2.5 py-1 bg-stone-100 hover:bg-red-50 text-stone-600 hover:text-red-700 border border-stone-200 text-xs font-medium rounded transition'
+
 export default function AdminPage() {
   const [authChecking, setAuthChecking] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -101,8 +113,7 @@ export default function AdminPage() {
     setProjects(list)
     if (list.length > 0) {
       const nextId =
-        (preferredId && list.some((p) => p.id === preferredId) && preferredId) ||
-        list[0].id
+        (preferredId && list.some((p) => p.id === preferredId) && preferredId) || list[0].id
       setSelectedProjectId(nextId)
       await loadProjectData(nextId)
     }
@@ -171,12 +182,12 @@ export default function AdminPage() {
     }
 
     setIsUploadingReceipt(true)
-    setReceiptStatusMsg('處理中...')
+    setReceiptStatusMsg('處理中…')
 
     try {
       let photoUrl = ''
       if (receiptFile) {
-        setReceiptStatusMsg('上傳相片中...')
+        setReceiptStatusMsg('上傳相片中…')
         photoUrl = await uploadAdminPhoto(receiptFile, 'receipts')
       }
 
@@ -195,13 +206,13 @@ export default function AdminPage() {
       const { data } = await readJsonSafe(res)
       if (!res.ok) throw new Error(data.error || '新增失敗')
 
-      setReceiptStatusMsg('✅ 單據新增成功！')
+      setReceiptStatusMsg('單據新增成功')
       setReceiptAmount('')
       setReceiptDescription('')
       setReceiptFile(null)
       await loadProjectData(selectedProjectId)
     } catch (err: any) {
-      setReceiptStatusMsg(`❌ 新增失敗: ${err.message || '未知錯誤'}`)
+      setReceiptStatusMsg(`新增失敗：${err.message || '未知錯誤'}`)
     } finally {
       setIsUploadingReceipt(false)
     }
@@ -248,12 +259,12 @@ export default function AdminPage() {
     }
 
     setIsUploadingLog(true)
-    setLogStatusMsg('處理中...')
+    setLogStatusMsg('處理中…')
 
     try {
       let photoUrl = ''
       if (logFile) {
-        setLogStatusMsg('上傳相片中...')
+        setLogStatusMsg('上傳相片中…')
         photoUrl = await uploadAdminPhoto(logFile, 'logs')
       }
 
@@ -269,12 +280,12 @@ export default function AdminPage() {
       const { data } = await readJsonSafe(res)
       if (!res.ok) throw new Error(data.error || '新增失敗')
 
-      setLogStatusMsg('✅ 施工動態新增成功！')
+      setLogStatusMsg('施工動態新增成功')
       setLogContent('')
       setLogFile(null)
       await loadProjectData(selectedProjectId)
     } catch (err: any) {
-      setLogStatusMsg(`❌ 新增失敗: ${err.message || '未知錯誤'}`)
+      setLogStatusMsg(`新增失敗：${err.message || '未知錯誤'}`)
     } finally {
       setIsUploadingLog(false)
     }
@@ -352,56 +363,82 @@ export default function AdminPage() {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white text-sm">
-        驗證登入狀態中...
+      <div className="min-h-screen bg-[#f3f1ee] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 border-2 border-stone-800 border-t-transparent rounded-full animate-spin" />
+          <p className="text-stone-500 text-sm tracking-wide">驗證登入狀態中</p>
+        </div>
       </div>
     )
   }
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <form onSubmit={handleLogin} className="bg-white p-6 rounded-xl shadow-xl w-full max-w-sm space-y-4">
-          <h2 className="text-xl font-bold text-slate-800 text-center">工程管理員登入</h2>
-          <input
-            type="password"
-            placeholder="請輸入管理員密碼"
-            value={passwordInput}
-            onChange={(e) => setPasswordInput(e.target.value)}
-            className="w-full p-2.5 border rounded-lg text-slate-900 text-sm font-bold"
-          />
-          {loginError && <p className="text-xs text-red-500 text-center font-bold">密碼錯誤，請重新輸入</p>}
-          <button
-            type="submit"
-            disabled={loginLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-lg text-sm font-bold disabled:opacity-50"
-          >
-            {loginLoading ? '登入中...' : '登入系統'}
-          </button>
-        </form>
+      <div className="min-h-screen bg-[#f3f1ee] text-stone-800 flex flex-col">
+        <header className="bg-[#1c1917] text-stone-100 border-b border-stone-700/60">
+          <div className="max-w-4xl mx-auto px-4 py-4">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-teal-400/90 font-medium">Admin Portal</p>
+            <h1 className="text-lg sm:text-xl font-semibold tracking-wide mt-0.5">工程管理後台</h1>
+          </div>
+        </header>
+
+        <main className="flex-1 flex items-center justify-center p-4 sm:p-6">
+          <div className={`w-full max-w-md ${cardClass}`}>
+            <div className="px-6 py-5 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50">
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-400">管理員登入</p>
+              <h2 className="text-xl font-semibold text-stone-900 mt-1">進入工程管理</h2>
+              <p className="text-xs text-stone-500 mt-2">請輸入管理員密碼</p>
+            </div>
+            <form onSubmit={handleLogin} className="px-6 py-6 space-y-4">
+              <div>
+                <label className={labelClass}>密碼</label>
+                <input
+                  type="password"
+                  placeholder="管理員密碼"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              {loginError && (
+                <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
+                  密碼錯誤，請重新輸入
+                </p>
+              )}
+              <button type="submit" disabled={loginLoading} className={primaryBtnClass}>
+                {loginLoading ? '登入中…' : '登入後台'}
+              </button>
+            </form>
+          </div>
+        </main>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 sm:p-6 text-slate-900 font-sans">
-      <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <h1 className="text-xl font-bold text-slate-900">Admin 工程管理後台</h1>
+    <div className="min-h-screen bg-[#f3f1ee] text-stone-800 pb-16">
+      <header className="bg-[#1c1917] text-stone-100 sticky top-0 z-40 border-b border-stone-700/60">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center gap-4">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.2em] text-teal-400/90 font-medium">Admin Portal</p>
+            <h1 className="text-lg sm:text-xl font-semibold tracking-wide mt-0.5">工程管理後台</h1>
+          </div>
           <button
             onClick={handleLogout}
-            className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-lg transition"
+            className="px-3 py-1.5 rounded-md text-xs font-medium border border-stone-600 text-stone-300 hover:bg-stone-800 hover:text-white transition"
           >
-            登出系統
+            登出
           </button>
         </div>
+      </header>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-2">
-          <label className="text-xs font-bold text-slate-700 block">選擇工程單位：</label>
+      <main className="max-w-4xl mx-auto px-4 mt-6 space-y-5">
+        <section className={`${cardClass} p-5 space-y-2`}>
+          <label className={labelClass}>選擇工程單位</label>
           <select
             value={selectedProjectId}
             onChange={(e) => handleSelectProject(e.target.value)}
-            className="w-full p-2.5 border rounded-lg bg-white font-bold text-slate-900 text-base"
+            className={`${inputClass} font-semibold`}
           >
             {projects.length === 0 ? (
               <option value="" disabled>
@@ -409,273 +446,296 @@ export default function AdminPage() {
               </option>
             ) : (
               projects.map((p) => (
-                <option key={p.id} value={p.id} className="text-slate-900 font-bold">
+                <option key={p.id} value={p.id}>
                   {p.address}
                 </option>
               ))
             )}
           </select>
-        </div>
+        </section>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">📸 新增施工動態紀錄</h2>
-
-          <form onSubmit={handleAddProgressLog} className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-            <div>
-              <label className="text-xs font-bold text-slate-800 block mb-1">施工紀錄描述 / 進度更新</label>
-              <textarea
-                rows={3}
-                placeholder="例: 今日已完成大廳電線開槽及埋喉工作"
-                value={logContent}
-                onChange={(e) => setLogContent(e.target.value)}
-                className="w-full p-2.5 border rounded-lg text-sm font-bold text-slate-900 placeholder:text-slate-400 bg-white"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-bold text-slate-800 block mb-1">現場相片 (可選)</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setLogFile(e.target.files?.[0] || null)}
-                className="w-full p-1.5 border rounded-lg text-xs bg-white text-slate-900 font-bold"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isUploadingLog}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition text-sm disabled:opacity-50"
-            >
-              {isUploadingLog ? '發佈中...' : '發佈施工動態'}
-            </button>
-
-            {logStatusMsg && (
-              <p className={`text-xs font-bold text-center ${logStatusMsg.includes('❌') ? 'text-red-500' : 'text-emerald-600'}`}>
-                {logStatusMsg}
-              </p>
-            )}
-          </form>
-
-          <div className="space-y-3 pt-2">
-            <h3 className="text-sm font-bold text-slate-900">歷史施工動態紀錄 ({logs.length} 筆)</h3>
-            {logs.length === 0 ? (
-              <p className="text-xs font-bold text-slate-500 italic">暫無施工紀錄</p>
-            ) : (
-              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                {logs.map((log) => {
-                  const imgUrl = log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls[0] : null
-                  const text = log.description || ''
-
-                  return (
-                    <div
-                      key={log.id}
-                      className="flex justify-between items-start bg-white p-3 rounded-lg border border-slate-200 shadow-sm gap-3"
-                    >
-                      <div className="flex gap-3 items-start">
-                        {imgUrl && (
-                          <img src={imgUrl} alt="Progress" className="w-12 h-12 object-cover rounded-md border flex-shrink-0" />
-                        )}
-                        <div>
-                          <p className="text-sm font-bold text-slate-900 whitespace-pre-wrap">{text}</p>
-                          <p className="text-xs font-bold text-slate-400 mt-1">{new Date(log.created_at).toLocaleString()}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteLog(log.id)}
-                        className="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-600 text-xs font-bold rounded transition flex-shrink-0"
-                      >
-                        刪除
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-5">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b pb-4">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">📑 材料收費區管理</h2>
-              <p className="text-xs font-bold text-blue-600 mt-0.5">
-                當前階段：第 {currentPhase?.phase_number || 1} 期收款
-              </p>
-            </div>
-            <button
-              onClick={handleConfirmPhasePayment}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition flex items-center gap-1"
-            >
-              ✓ 確認第 {currentPhase?.phase_number || 1} 期已收款（開展新一期）
-            </button>
+        <section className={cardClass}>
+          <div className="px-5 sm:px-6 py-4 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50">
+            <h2 className="text-base font-semibold text-stone-900">新增施工動態</h2>
+            <p className="text-xs text-stone-500 mt-1">發佈進度說明與現場照片</p>
           </div>
 
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
-            <h3 className="text-sm font-bold text-slate-900">
-              新增材料單據（屬於第 {currentPhase?.phase_number || 1} 期）
-            </h3>
-
-            <form onSubmit={handleAddReceipt} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-slate-800 block mb-1">所屬工程</label>
-                  <select
-                    value={receiptCategory}
-                    onChange={(e) => setReceiptCategory(e.target.value)}
-                    className="w-full p-2 border rounded-lg text-sm bg-white font-bold text-slate-900"
-                  >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c} className="text-slate-900 font-bold">
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-800 block mb-1">單據金額 (HKD)</label>
-                  <input
-                    type="number"
-                    placeholder="例: 1500"
-                    value={receiptAmount}
-                    onChange={(e) => setReceiptAmount(e.target.value)}
-                    className="w-full p-2 border rounded-lg text-sm font-bold text-slate-900 placeholder:text-slate-400 bg-white"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-800 block mb-1">單據相片</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-                    className="w-full p-1.5 border rounded-lg text-xs bg-white text-slate-900 font-bold"
-                  />
-                </div>
-              </div>
-
+          <div className="px-5 sm:px-6 py-5 space-y-4">
+            <form onSubmit={handleAddProgressLog} className="space-y-4 bg-stone-50 p-4 rounded-lg border border-stone-200">
               <div>
-                <label className="text-xs font-bold text-slate-800 block mb-1">單據描述 / 備註</label>
-                <input
-                  type="text"
-                  placeholder="例: 買客廳電線喉管及制面"
-                  value={receiptDescription}
-                  onChange={(e) => setReceiptDescription(e.target.value)}
-                  className="w-full p-2 border rounded-lg text-sm font-bold text-slate-900 placeholder:text-slate-400 bg-white"
+                <label className={labelClass}>施工紀錄描述</label>
+                <textarea
+                  rows={3}
+                  placeholder="例：今日已完成大廳電線開槽及埋喉工作"
+                  value={logContent}
+                  onChange={(e) => setLogContent(e.target.value)}
+                  className={inputClass}
+                  required
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={isUploadingReceipt}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition text-sm disabled:opacity-50"
-              >
-                {isUploadingReceipt ? '正在新增...' : '新增此單據'}
+              <div>
+                <label className={labelClass}>現場相片（可選）</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setLogFile(e.target.files?.[0] || null)}
+                  className={`${inputClass} file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:bg-stone-200 file:text-stone-700 file:text-xs`}
+                />
+              </div>
+
+              <button type="submit" disabled={isUploadingLog} className={primaryBtnClass}>
+                {isUploadingLog ? '發佈中…' : '發佈施工動態'}
               </button>
 
-              {receiptStatusMsg && (
+              {logStatusMsg && (
                 <p
-                  className={`text-xs font-bold text-center ${
-                    receiptStatusMsg.includes('❌') ? 'text-red-500' : 'text-emerald-600'
+                  className={`text-xs text-center font-medium ${
+                    logStatusMsg.includes('失敗') ? 'text-red-700' : 'text-teal-800'
                   }`}
                 >
-                  {receiptStatusMsg}
+                  {logStatusMsg}
                 </p>
               )}
             </form>
+
+            <div className="space-y-3 pt-1">
+              <h3 className="text-sm font-semibold text-stone-900">
+                歷史紀錄
+                <span className="ml-2 text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
+                  {logs.length} 筆
+                </span>
+              </h3>
+              {logs.length === 0 ? (
+                <p className="text-xs text-stone-400 py-2">暫無施工紀錄</p>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {logs.map((log) => {
+                    const imgUrl = log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls[0] : null
+                    const text = log.description || ''
+
+                    return (
+                      <div
+                        key={log.id}
+                        className="flex justify-between items-start bg-white p-3 rounded-lg border border-stone-200 gap-3"
+                      >
+                        <div className="flex gap-3 items-start min-w-0">
+                          {imgUrl && (
+                            <img
+                              src={imgUrl}
+                              alt="Progress"
+                              className="w-12 h-12 object-cover rounded-md border border-stone-200 flex-shrink-0"
+                            />
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-stone-900 whitespace-pre-wrap">{text}</p>
+                            <p className="text-[11px] text-stone-400 mt-1 tabular-nums">
+                              {new Date(log.created_at).toLocaleString('zh-HK')}
+                            </p>
+                          </div>
+                        </div>
+                        <button onClick={() => handleDeleteLog(log.id)} className={`${dangerBtnClass} flex-shrink-0`}>
+                          刪除
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className={cardClass}>
+          <div className="px-5 sm:px-6 py-4 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-stone-900">材料收費管理</h2>
+              <p className="text-xs text-teal-800 font-medium mt-1">
+                當前：第 {currentPhase?.phase_number || 1} 期收款
+              </p>
+            </div>
+            <button onClick={handleConfirmPhasePayment} className={secondaryBtnClass}>
+              確認第 {currentPhase?.phase_number || 1} 期已收款
+            </button>
           </div>
 
-          <div className="space-y-3">
-            <h3 className="text-sm font-bold text-slate-900">本期已新增單據 ({receipts.length} 筆)</h3>
+          <div className="px-5 sm:px-6 py-5 space-y-5">
+            <div className="bg-stone-50 p-4 rounded-lg border border-stone-200 space-y-4">
+              <h3 className="text-sm font-semibold text-stone-900">
+                新增材料單據（第 {currentPhase?.phase_number || 1} 期）
+              </h3>
 
-            {receipts.length === 0 ? (
-              <p className="text-xs font-bold text-slate-500 italic">本期暫無單據</p>
-            ) : (
-              <div className="space-y-2">
-                {receipts.map((r) => (
-                  <div
-                    key={r.id}
-                    className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-sm"
+              <form onSubmit={handleAddReceipt} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className={labelClass}>所屬工程</label>
+                    <select
+                      value={receiptCategory}
+                      onChange={(e) => setReceiptCategory(e.target.value)}
+                      className={inputClass}
+                    >
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>單據金額 (HKD)</label>
+                    <input
+                      type="number"
+                      placeholder="例：1500"
+                      value={receiptAmount}
+                      onChange={(e) => setReceiptAmount(e.target.value)}
+                      className={inputClass}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>單據相片</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                      className={`${inputClass} file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-stone-200 file:text-stone-700 file:text-xs`}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className={labelClass}>單據描述／備註</label>
+                  <input
+                    type="text"
+                    placeholder="例：買客廳電線喉管及制面"
+                    value={receiptDescription}
+                    onChange={(e) => setReceiptDescription(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+
+                <button type="submit" disabled={isUploadingReceipt} className={primaryBtnClass}>
+                  {isUploadingReceipt ? '正在新增…' : '新增此單據'}
+                </button>
+
+                {receiptStatusMsg && (
+                  <p
+                    className={`text-xs text-center font-medium ${
+                      receiptStatusMsg.includes('失敗') ? 'text-red-700' : 'text-teal-800'
+                    }`}
                   >
-                    <div className="flex items-center gap-3">
-                      {r.photo_url ? (
-                        <img src={r.photo_url} alt="Receipt" className="w-10 h-10 object-cover rounded-md border" />
-                      ) : (
-                        <div className="w-10 h-10 bg-slate-100 rounded-md border flex items-center justify-center text-xs font-bold text-slate-400">
-                          無圖
+                    {receiptStatusMsg}
+                  </p>
+                )}
+              </form>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-stone-900">
+                本期單據
+                <span className="ml-2 text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
+                  {receipts.length} 筆
+                </span>
+              </h3>
+
+              {receipts.length === 0 ? (
+                <p className="text-xs text-stone-400 py-2">本期暫無單據</p>
+              ) : (
+                <div className="space-y-2">
+                  {receipts.map((r) => (
+                    <div
+                      key={r.id}
+                      className="flex justify-between items-center bg-white p-3 rounded-lg border border-stone-200 gap-3"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {r.photo_url ? (
+                          <img
+                            src={r.photo_url}
+                            alt="Receipt"
+                            className="w-10 h-10 object-cover rounded-md border border-stone-200"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 bg-stone-100 rounded-md border border-stone-200 flex items-center justify-center text-[10px] text-stone-400">
+                            無圖
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-stone-900">
+                            <span className="text-stone-500">[{r.category}]</span> {r.description || '無備註'}
+                          </p>
+                          <p className="text-[11px] text-stone-400 tabular-nums">
+                            {new Date(r.created_at).toLocaleDateString('zh-HK')}
+                          </p>
                         </div>
-                      )}
-                      <div>
-                        <p className="text-sm font-bold text-slate-900">
-                          <span className="text-blue-600">[{r.category}]</span> {r.description || '無備註'}
-                        </p>
-                        <p className="text-xs font-bold text-slate-500">{new Date(r.created_at).toLocaleDateString()}</p>
+                      </div>
+
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span className="text-sm font-semibold tabular-nums text-stone-900">HK$ {r.amount}</span>
+                        <button onClick={() => handleDeleteReceipt(r.id)} className={dangerBtnClass}>
+                          刪除
+                        </button>
                       </div>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
 
-                    <div className="flex items-center gap-4">
-                      <span className="text-base font-extrabold text-slate-900">HK$ {r.amount}</span>
-                      <button
-                        onClick={() => handleDeleteReceipt(r.id)}
-                        className="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-600 text-xs font-bold rounded transition"
-                      >
-                        刪除
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+        <section className={cardClass}>
+          <div className="px-5 sm:px-6 py-4 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50 flex justify-between items-center">
+            <div>
+              <h2 className="text-base font-semibold text-stone-900">各項工序完成度</h2>
+              <p className="text-xs text-stone-500 mt-1">勾選後會自動同步至前台</p>
+            </div>
+            {isSavingStages && (
+              <span className="text-[11px] font-medium text-teal-800 animate-pulse">儲存中…</span>
             )}
           </div>
-        </div>
 
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-bold text-slate-900">📋 各項工序完成度明細</h2>
-            {isSavingStages && <span className="text-xs font-bold text-blue-600 animate-pulse">💾 自動儲存中...</span>}
-          </div>
-
-          <div className="space-y-4">
+          <div className="px-5 sm:px-6 py-5 space-y-3">
             {INITIAL_STAGES.map((stage) => {
               const category = stage.category
               const isCategoryEnabled = stageState[category]?.enabled ?? true
 
               return (
-                <div key={category} className="border border-slate-200 p-4 rounded-xl space-y-3 bg-slate-50">
-                  <div className="flex justify-between items-center">
-                    <h3 className="text-base font-bold text-slate-900">{category}</h3>
+                <div key={category} className="border border-stone-200 p-4 rounded-lg space-y-3 bg-stone-50/70">
+                  <div className="flex justify-between items-center gap-3">
+                    <h3 className="text-sm font-semibold text-stone-900">{category}</h3>
                     <button
                       onClick={() => handleToggleCategory(category)}
-                      className={`text-xs font-bold px-3 py-1 rounded-full transition ${
-                        isCategoryEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'
+                      className={`text-[11px] font-medium px-2.5 py-1 rounded transition ${
+                        isCategoryEnabled
+                          ? 'bg-teal-50 text-teal-800 border border-teal-200'
+                          : 'bg-stone-200 text-stone-600 border border-stone-300'
                       }`}
                     >
-                      {isCategoryEnabled ? '✓ 此大項需要做' : '✕ 此大項不需要'}
+                      {isCategoryEnabled ? '需要做' : '不需要'}
                     </button>
                   </div>
 
                   {isCategoryEnabled && (
-                    <div className="flex flex-wrap gap-2 pt-1">
+                    <div className="flex flex-wrap gap-2 pt-0.5">
                       {stage.items.map((item) => {
                         const isChecked = stageState[category]?.items?.[item] ?? false
 
                         return (
                           <label
                             key={item}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-bold cursor-pointer transition select-none ${
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium cursor-pointer transition select-none ${
                               isChecked
-                                ? 'bg-emerald-50 border-emerald-400 text-emerald-800'
-                                : 'bg-white border-slate-300 text-slate-800'
+                                ? 'bg-teal-50 border-teal-200 text-teal-900'
+                                : 'bg-white border-stone-300 text-stone-700'
                             }`}
                           >
                             <input
                               type="checkbox"
                               checked={isChecked}
                               onChange={() => handleToggleStageItem(category, item)}
-                              className="rounded text-emerald-600"
+                              className="rounded text-teal-700"
                             />
                             {item}
                           </label>
@@ -687,8 +747,8 @@ export default function AdminPage() {
               )
             })}
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   )
 }
