@@ -64,6 +64,7 @@ export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [passwordInput, setPasswordInput] = useState('')
   const [loginError, setLoginError] = useState(false)
+  const [loginErrorMsg, setLoginErrorMsg] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
 
   const [projects, setProjects] = useState<Project[]>([])
@@ -142,14 +143,17 @@ export default function AdminPage() {
     e.preventDefault()
     setLoginLoading(true)
     setLoginError(false)
+    setLoginErrorMsg('')
     try {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: passwordInput }),
       })
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setLoginError(true)
+        setLoginErrorMsg(data.error || '密碼錯誤，請重新輸入')
         return
       }
       setIsAuthenticated(true)
@@ -157,6 +161,7 @@ export default function AdminPage() {
       await fetchProjects()
     } catch {
       setLoginError(true)
+      setLoginErrorMsg('登入失敗，請稍後再試')
     } finally {
       setLoginLoading(false)
     }
@@ -402,7 +407,7 @@ export default function AdminPage() {
               </div>
               {loginError && (
                 <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">
-                  密碼錯誤，請重新輸入
+                  {loginErrorMsg || '密碼錯誤，請重新輸入'}
                 </p>
               )}
               <button type="submit" disabled={loginLoading} className={primaryBtnClass}>
