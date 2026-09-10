@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { INITIAL_STAGES } from '@/lib/stages'
+import { readJsonSafe, uploadAdminPhoto } from '@/lib/admin-upload'
 
 interface Project {
   id: string
@@ -175,16 +176,25 @@ export default function AdminPage() {
     setReceiptStatusMsg('處理中...')
 
     try {
-      const form = new FormData()
-      form.set('projectId', selectedProjectId)
-      form.set('phaseId', currentPhase.id)
-      form.set('category', receiptCategory)
-      form.set('amount', receiptAmount)
-      form.set('description', receiptDescription)
-      if (receiptFile) form.set('file', receiptFile)
+      let photoUrl = ''
+      if (receiptFile) {
+        setReceiptStatusMsg('上傳相片中...')
+        photoUrl = await uploadAdminPhoto(receiptFile, 'receipts')
+      }
 
-      const res = await fetch('/api/admin/receipts', { method: 'POST', body: form })
-      const data = await res.json()
+      const res = await fetch('/api/admin/receipts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: selectedProjectId,
+          phaseId: currentPhase.id,
+          category: receiptCategory,
+          amount: receiptAmount,
+          description: receiptDescription,
+          photoUrl,
+        }),
+      })
+      const { data } = await readJsonSafe(res)
       if (!res.ok) throw new Error(data.error || '新增失敗')
 
       setReceiptStatusMsg('✅ 單據新增成功！')
@@ -243,13 +253,22 @@ export default function AdminPage() {
     setLogStatusMsg('處理中...')
 
     try {
-      const form = new FormData()
-      form.set('projectId', selectedProjectId)
-      form.set('description', logContent)
-      if (logFile) form.set('file', logFile)
+      let photoUrl = ''
+      if (logFile) {
+        setLogStatusMsg('上傳相片中...')
+        photoUrl = await uploadAdminPhoto(logFile, 'logs')
+      }
 
-      const res = await fetch('/api/admin/logs', { method: 'POST', body: form })
-      const data = await res.json()
+      const res = await fetch('/api/admin/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: selectedProjectId,
+          description: logContent,
+          photoUrl,
+        }),
+      })
+      const { data } = await readJsonSafe(res)
       if (!res.ok) throw new Error(data.error || '新增失敗')
 
       setLogStatusMsg('✅ 施工動態新增成功！')
@@ -280,6 +299,7 @@ export default function AdminPage() {
   }
 
   const handleToggleCategory = async (category: string) => {
+    const previous = stageState
     const updated = {
       ...stageState,
       [category]: {
@@ -288,10 +308,12 @@ export default function AdminPage() {
       },
     }
     setStageState(updated)
-    saveStages(updated)
+    const ok = await saveStages(updated)
+    if (!ok) setStageState(previous)
   }
 
   const handleToggleStageItem = async (category: string, item: string) => {
+    const previous = stageState
     const updated = {
       ...stageState,
       [category]: {
@@ -303,22 +325,31 @@ export default function AdminPage() {
       },
     }
     setStageState(updated)
-    saveStages(updated)
+    const ok = await saveStages(updated)
+    if (!ok) setStageState(previous)
   }
 
   const saveStages = async (updatedState: StageState) => {
-    if (!selectedProjectId) return
+    if (!selectedProjectId) return false
     setIsSavingStages(true)
-    const res = await fetch('/api/admin/stages', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: selectedProjectId, stages_state: updatedState }),
-    })
-    if (!res.ok) {
-      const data = await res.json()
-      alert(`同步失敗: ${data.error || '未知錯誤'}`)
+    try {
+      const res = await fetch('/api/admin/stages', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: selectedProjectId, stages_state: updatedState }),
+      })
+      const { data } = await readJsonSafe(res)
+      if (!res.ok) {
+        alert(`同步失敗: ${data.error || '未知錯誤'}`)
+        return false
+      }
+      return true
+    } catch (err: any) {
+      alert(`同步失敗: ${err.message || '未知錯誤'}`)
+      return false
+    } finally {
+      setIsSavingStages(false)
     }
-    setIsSavingStages(false)
   }
 
   if (authChecking) {

@@ -2,42 +2,38 @@ import { NextResponse } from 'next/server'
 import { requireAdminSession, unauthorized } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase-server'
 
-async function uploadPhoto(file: File, folder: string) {
-  const supabase = createServiceClient()
-  const fileExt = file.name.split('.').pop() || 'jpg'
-  const fileName = `${folder}_${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`
-  const filePath = `${folder}/${fileName}`
-  const buffer = Buffer.from(await file.arrayBuffer())
-
-  const { error: uploadError } = await supabase.storage
-    .from('progress-photos')
-    .upload(filePath, buffer, { contentType: file.type || 'image/jpeg' })
-
-  if (uploadError) throw new Error(uploadError.message)
-
-  const { data: publicUrlData } = supabase.storage.from('progress-photos').getPublicUrl(filePath)
-  return publicUrlData.publicUrl
-}
-
 export async function POST(request: Request) {
   if (!(await requireAdminSession())) return unauthorized()
 
   try {
-    const form = await request.formData()
-    const projectId = String(form.get('projectId') || '')
-    const phaseId = String(form.get('phaseId') || '')
-    const category = String(form.get('category') || '')
-    const amount = parseFloat(String(form.get('amount') || ''))
-    const description = String(form.get('description') || '')
-    const file = form.get('file')
+    const contentType = request.headers.get('content-type') || ''
+    let projectId = ''
+    let phaseId = ''
+    let category = ''
+    let amount = NaN
+    let description = ''
+    let photoUrl = ''
+
+    if (contentType.includes('application/json')) {
+      const body = await request.json()
+      projectId = String(body.projectId || '')
+      phaseId = String(body.phaseId || '')
+      category = String(body.category || '')
+      amount = parseFloat(String(body.amount || ''))
+      description = String(body.description || '')
+      photoUrl = String(body.photoUrl || '')
+    } else {
+      const form = await request.formData()
+      projectId = String(form.get('projectId') || '')
+      phaseId = String(form.get('phaseId') || '')
+      category = String(form.get('category') || '')
+      amount = parseFloat(String(form.get('amount') || ''))
+      description = String(form.get('description') || '')
+      photoUrl = String(form.get('photoUrl') || '')
+    }
 
     if (!projectId || !phaseId || !category || Number.isNaN(amount)) {
       return NextResponse.json({ error: '缺少必要欄位' }, { status: 400 })
-    }
-
-    let photoUrl = ''
-    if (file instanceof File && file.size > 0) {
-      photoUrl = await uploadPhoto(file, 'receipts')
     }
 
     const supabase = createServiceClient()

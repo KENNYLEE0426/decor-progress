@@ -103,16 +103,10 @@ export default function DashboardPage() {
     })
   }
 
+  // 只認 stages_state[category].items[item]，避免舊 flat key / 跨類同名誤判
   const isItemChecked = (category: string, item: string, state: Record<string, any>) => {
-    if (!state) return false
-
-    if (state[category]?.items?.[item] !== undefined) {
-      return Boolean(state[category].items[item])
-    }
-
-    const fullKey = `${category}-${item}`
-    const val = state[fullKey] !== undefined ? state[fullKey] : state[item]
-    return val === true || val === 'true' || val === 1 || val === '1'
+    if (!state?.[category]?.items) return false
+    return state[category].items[item] === true
   }
 
   if (loading) {

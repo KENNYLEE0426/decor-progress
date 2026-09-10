@@ -2,40 +2,34 @@ import { NextResponse } from 'next/server'
 import { requireAdminSession, unauthorized } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase-server'
 
-async function uploadPhoto(file: File, folder: string) {
-  const supabase = createServiceClient()
-  const fileExt = file.name.split('.').pop() || 'jpg'
-  const fileName = `${folder}_${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`
-  const filePath = `${folder}/${fileName}`
-  const buffer = Buffer.from(await file.arrayBuffer())
-
-  const { error: uploadError } = await supabase.storage
-    .from('progress-photos')
-    .upload(filePath, buffer, { contentType: file.type || 'image/jpeg' })
-
-  if (uploadError) throw new Error(uploadError.message)
-
-  const { data: publicUrlData } = supabase.storage.from('progress-photos').getPublicUrl(filePath)
-  return publicUrlData.publicUrl
-}
-
 export async function POST(request: Request) {
   if (!(await requireAdminSession())) return unauthorized()
 
   try {
-    const form = await request.formData()
-    const projectId = String(form.get('projectId') || '')
-    const description = String(form.get('description') || '')
-    const file = form.get('file')
+    const contentType = request.headers.get('content-type') || ''
+    let projectId = ''
+    let description = ''
+    let photoUrls: string[] = []
+
+    if (contentType.includes('application/json')) {
+      const body = await request.json()
+      projectId = String(body.projectId || '')
+      description = String(body.description || '')
+      if (Array.isArray(body.photo_urls)) {
+        photoUrls = body.photo_urls.filter((u: unknown) => typeof u === 'string')
+      } else if (typeof body.photoUrl === 'string' && body.photoUrl) {
+        photoUrls = [body.photoUrl]
+      }
+    } else {
+      const form = await request.formData()
+      projectId = String(form.get('projectId') || '')
+      description = String(form.get('description') || '')
+      const photoUrl = String(form.get('photoUrl') || '')
+      if (photoUrl) photoUrls = [photoUrl]
+    }
 
     if (!projectId || !description) {
       return NextResponse.json({ error: '請輸入施工進度描述' }, { status: 400 })
-    }
-
-    let photoUrls: string[] = []
-    if (file instanceof File && file.size > 0) {
-      const url = await uploadPhoto(file, 'logs')
-      photoUrls = [url]
     }
 
     const supabase = createServiceClient()
