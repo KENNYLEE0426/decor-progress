@@ -9,10 +9,21 @@ export async function GET() {
     const supabase = createServiceClient()
     const { data, error } = await supabase
       .from('projects')
-      .select('id, address, status, created_at')
+      .select('id, address, client_name, status, created_at')
       .order('created_at', { ascending: false })
 
     if (error) {
+      // 未加 client_name 欄位時 fallback，避免整站掛掉
+      if (String(error.message || '').includes('client_name')) {
+        const fallback = await supabase
+          .from('projects')
+          .select('id, address, status, created_at')
+          .order('created_at', { ascending: false })
+        if (fallback.error) {
+          return NextResponse.json({ error: fallback.error.message }, { status: 500 })
+        }
+        return NextResponse.json({ projects: fallback.data || [] })
+      }
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 

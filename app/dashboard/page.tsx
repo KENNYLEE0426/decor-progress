@@ -14,6 +14,7 @@ interface ProgressLog {
 interface Project {
   id: string
   address: string
+  client_name?: string | null
   status: string
   stages_state?: Record<string, any>
 }
@@ -207,6 +208,11 @@ export default function DashboardPage() {
                   <h2 className="text-xl sm:text-2xl font-semibold text-stone-900 mt-1 leading-snug">
                     {project.address}
                   </h2>
+                  {project.client_name?.trim() && (
+                    <p className="text-sm text-stone-600 mt-1.5">
+                      客戶：<span className="font-medium text-stone-800">{project.client_name.trim()}</span>
+                    </p>
+                  )}
                 </div>
                 <div className="sm:text-right">
                   <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-400">整體進度</span>

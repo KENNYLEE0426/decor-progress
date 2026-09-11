@@ -7,6 +7,7 @@ import { readJsonSafe, uploadAdminPhoto } from '@/lib/admin-upload'
 interface Project {
   id: string
   address: string
+  client_name?: string | null
   status: string
   created_at?: string
 }
@@ -479,7 +480,7 @@ export default function AdminPage() {
             ) : (
               projects.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.address}
+                  {p.client_name?.trim() ? `${p.client_name.trim()} · ${p.address}` : p.address}
                 </option>
               ))
             )}

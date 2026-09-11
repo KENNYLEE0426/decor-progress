@@ -48,11 +48,21 @@ export async function GET(
     const { id: projectId } = await context.params
     const supabase = createServiceClient()
 
-    const { data: project, error: projectError } = await supabase
+    let { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('id, address, status, stages_state')
+      .select('id, address, client_name, status, stages_state')
       .eq('id', projectId)
       .single()
+
+    if (projectError && String(projectError.message || '').includes('client_name')) {
+      const fallback = await supabase
+        .from('projects')
+        .select('id, address, status, stages_state')
+        .eq('id', projectId)
+        .single()
+      project = fallback.data as any
+      projectError = fallback.error
+    }
 
     if (projectError || !project) {
       return NextResponse.json({ error: '找不到工程單位' }, { status: 404 })
@@ -110,6 +120,7 @@ export async function GET(
       project: {
         id: project.id,
         address: project.address,
+        client_name: (project as any).client_name || null,
         status: project.status,
       },
       stages_state: mergeStageState(project.stages_state),
