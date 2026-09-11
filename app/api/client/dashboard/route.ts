@@ -12,18 +12,31 @@ export async function GET() {
 
     let { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('id, address, client_name, status, stages_state')
+      .select('id, address, client_name, status, stages_state, project_type')
       .eq('id', projectId)
       .single()
 
-    if (projectError && String(projectError.message || '').includes('client_name')) {
-      const fallback = await supabase
-        .from('projects')
-        .select('id, address, status, stages_state')
-        .eq('id', projectId)
-        .single()
-      project = fallback.data as any
-      projectError = fallback.error
+    if (projectError) {
+      const msg = String(projectError.message || '')
+      if (msg.includes('project_type') || msg.includes('client_name')) {
+        const fallback = await supabase
+          .from('projects')
+          .select('id, address, client_name, status, stages_state')
+          .eq('id', projectId)
+          .single()
+        if (fallback.error && String(fallback.error.message || '').includes('client_name')) {
+          const basic = await supabase
+            .from('projects')
+            .select('id, address, status, stages_state')
+            .eq('id', projectId)
+            .single()
+          project = basic.data as any
+          projectError = basic.error
+        } else {
+          project = fallback.data as any
+          projectError = fallback.error
+        }
+      }
     }
 
     if (projectError || !project) {

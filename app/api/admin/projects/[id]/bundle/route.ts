@@ -1,42 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdminSession, unauthorized } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase-server'
-import { INITIAL_STAGES } from '@/lib/stages'
-
-type StageState = {
-  [category: string]: {
-    enabled: boolean
-    items: { [item: string]: boolean }
-  }
-}
-
-function defaultStageState(): StageState {
-  const state: StageState = {}
-  INITIAL_STAGES.forEach((stage) => {
-    state[stage.category] = {
-      enabled: true,
-      items: stage.items.reduce((acc, item) => ({ ...acc, [item]: false }), {}),
-    }
-  })
-  return state
-}
-
-function mergeStageState(raw: any): StageState {
-  const merged = defaultStageState()
-  if (!raw || typeof raw !== 'object') return merged
-
-  Object.keys(raw).forEach((cat) => {
-    if (!merged[cat]) return
-    merged[cat] = {
-      enabled: raw[cat]?.enabled ?? true,
-      items: {
-        ...merged[cat].items,
-        ...(raw[cat]?.items || {}),
-      },
-    }
-  })
-  return merged
-}
+import { mergeStageState } from '@/lib/stages'
 
 export async function GET(
   _request: Request,
@@ -50,18 +15,31 @@ export async function GET(
 
     let { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('id, address, client_name, status, stages_state')
+      .select('id, address, client_name, status, stages_state, project_type')
       .eq('id', projectId)
       .single()
 
-    if (projectError && String(projectError.message || '').includes('client_name')) {
-      const fallback = await supabase
-        .from('projects')
-        .select('id, address, status, stages_state')
-        .eq('id', projectId)
-        .single()
-      project = fallback.data as any
-      projectError = fallback.error
+    if (projectError) {
+      const msg = String(projectError.message || '')
+      if (msg.includes('project_type') || msg.includes('client_name')) {
+        const fallback = await supabase
+          .from('projects')
+          .select('id, address, client_name, status, stages_state')
+          .eq('id', projectId)
+          .single()
+        if (fallback.error && String(fallback.error.message || '').includes('client_name')) {
+          const basic = await supabase
+            .from('projects')
+            .select('id, address, status, stages_state')
+            .eq('id', projectId)
+            .single()
+          project = basic.data as any
+          projectError = basic.error
+        } else {
+          project = fallback.data as any
+          projectError = fallback.error
+        }
+      }
     }
 
     if (projectError || !project) {
@@ -132,6 +110,7 @@ export async function GET(
         address: project.address,
         client_name: (project as any).client_name || null,
         status: project.status,
+        project_type: (project as any).project_type || 'renovation',
       },
       stages_state: mergeStageState(project.stages_state),
       currentPhase,

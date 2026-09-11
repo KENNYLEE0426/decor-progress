@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { INITIAL_STAGES } from '@/lib/stages'
+import { INITIAL_STAGES, type StageState } from '@/lib/stages'
 import { readJsonSafe, uploadAdminPhoto } from '@/lib/admin-upload'
 
 interface Project {
@@ -10,6 +10,7 @@ interface Project {
   client_name?: string | null
   status: string
   created_at?: string
+  project_type?: 'renovation' | 'repair'
 }
 
 interface PaymentPhase {
@@ -48,13 +49,6 @@ interface WeeklyReport {
   created_at: string
 }
 
-interface StageState {
-  [category: string]: {
-    enabled: boolean
-    items: { [item: string]: boolean }
-  }
-}
-
 const CATEGORIES = INITIAL_STAGES.map((s) => s.category)
 
 const inputClass =
@@ -79,6 +73,8 @@ export default function AdminPage() {
 
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectId, setSelectedProjectId] = useState<string>('')
+  const [projectType, setProjectType] = useState<'renovation' | 'repair'>('renovation')
+  const [isSavingProjectType, setIsSavingProjectType] = useState(false)
 
   const [currentPhase, setCurrentPhase] = useState<PaymentPhase | null>(null)
   const [receipts, setReceipts] = useState<Receipt[]>([])
@@ -168,6 +164,7 @@ export default function AdminPage() {
     setLogs(data.logs || [])
     setWeeklyReports(data.weeklyReports || [])
     setStageState(data.stages_state || {})
+    setProjectType(data.project?.project_type === 'repair' ? 'repair' : 'renovation')
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -390,6 +387,48 @@ export default function AdminPage() {
     if (!ok) setStageState(previous)
   }
 
+  const handleToggleItemVisibility = async (category: string, item: string) => {
+    const previous = stageState
+    const currentlyHidden = stageState[category]?.hidden_items?.[item] === true
+    const updated = {
+      ...stageState,
+      [category]: {
+        ...stageState[category],
+        hidden_items: {
+          ...(stageState[category]?.hidden_items || {}),
+          [item]: !currentlyHidden,
+        },
+      },
+    }
+    setStageState(updated)
+    const ok = await saveStages(updated)
+    if (!ok) setStageState(previous)
+  }
+
+  const handleChangeProjectType = async (next: 'renovation' | 'repair') => {
+    if (!selectedProjectId || next === projectType) return
+    const previous = projectType
+    setProjectType(next)
+    setIsSavingProjectType(true)
+    try {
+      const res = await fetch('/api/admin/project-type', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: selectedProjectId, project_type: next }),
+      })
+      const { data } = await readJsonSafe(res)
+      if (!res.ok) {
+        setProjectType(previous)
+        alert(data.error || '更新工程類型失敗')
+      }
+    } catch (err: any) {
+      setProjectType(previous)
+      alert(err.message || '更新工程類型失敗')
+    } finally {
+      setIsSavingProjectType(false)
+    }
+  }
+
   const saveStages = async (updatedState: StageState) => {
     if (!selectedProjectId) return false
     setIsSavingStages(true)
@@ -537,25 +576,63 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 mt-6 space-y-5">
-        <section className={`${cardClass} p-5 space-y-2`}>
-          <label className={labelClass}>選擇工程單位</label>
-          <select
-            value={selectedProjectId}
-            onChange={(e) => handleSelectProject(e.target.value)}
-            className={`${inputClass} font-semibold`}
-          >
-            {projects.length === 0 ? (
-              <option value="" disabled>
-                暫無工程單位
-              </option>
-            ) : (
-              projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.client_name?.trim() ? `${p.client_name.trim()} · ${p.address}` : p.address}
+        <section className={`${cardClass} p-5 space-y-4`}>
+          <div className="space-y-2">
+            <label className={labelClass}>選擇工程單位</label>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => handleSelectProject(e.target.value)}
+              className={`${inputClass} font-semibold`}
+            >
+              {projects.length === 0 ? (
+                <option value="" disabled>
+                  暫無工程單位
                 </option>
-              ))
-            )}
-          </select>
+              ) : (
+                projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.client_name?.trim() ? `${p.client_name.trim()} · ${p.address}` : p.address}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className={labelClass}>工程類型（只喺後台設定，前台唔顯示）</label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={isSavingProjectType}
+                onClick={() => handleChangeProjectType('renovation')}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold border transition ${
+                  projectType === 'renovation'
+                    ? 'bg-teal-50 text-teal-900 border-teal-200'
+                    : 'bg-white text-stone-600 border-stone-300 hover:bg-stone-50'
+                }`}
+              >
+                裝修單
+              </button>
+              <button
+                type="button"
+                disabled={isSavingProjectType}
+                onClick={() => handleChangeProjectType('repair')}
+                className={`px-3 py-2 rounded-lg text-xs font-semibold border transition ${
+                  projectType === 'repair'
+                    ? 'bg-amber-50 text-amber-900 border-amber-200'
+                    : 'bg-white text-stone-600 border-stone-300 hover:bg-stone-50'
+                }`}
+              >
+                維修單
+              </button>
+            </div>
+            <p className="text-[11px] text-stone-500">
+              {projectType === 'renovation'
+                ? '裝修單：前台會顯示整體進度同各項工序完成度'
+                : '維修單：前台唔會顯示整體進度同各項工序完成度'}
+              {isSavingProjectType ? '（儲存中…）' : ''}
+            </p>
+          </div>
         </section>
 
         <section className={cardClass}>
@@ -825,7 +902,10 @@ export default function AdminPage() {
           <div className="px-5 sm:px-6 py-4 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50 flex justify-between items-center">
             <div>
               <h2 className="text-base font-semibold text-stone-900">各項工序完成度</h2>
-              <p className="text-xs text-stone-500 mt-1">勾選後會自動同步至前台</p>
+              <p className="text-xs text-stone-500 mt-1">
+                勾選後會自動同步至前台
+                {projectType === 'repair' ? '（此為維修單，前台暫唔顯示呢個區塊）' : ''}
+              </p>
             </div>
             {isSavingStages && (
               <span className="text-[11px] font-medium text-teal-800 animate-pulse">儲存中…</span>
@@ -854,29 +934,55 @@ export default function AdminPage() {
                   </div>
 
                   {isCategoryEnabled && (
-                    <div className="flex flex-wrap gap-2 pt-0.5">
-                      {stage.items.map((item) => {
-                        const isChecked = stageState[category]?.items?.[item] ?? false
+                    <div className="space-y-2 pt-0.5">
+                      {stage.allowHideItems && (
+                        <p className="text-[11px] text-stone-500">
+                          此大項細項可「客人可見／隱藏」：隱藏後前台唔顯示，亦唔計入整體進度
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {stage.items.map((item) => {
+                          const isChecked = stageState[category]?.items?.[item] ?? false
+                          const isHidden = stageState[category]?.hidden_items?.[item] === true
 
-                        return (
-                          <label
-                            key={item}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium cursor-pointer transition select-none ${
-                              isChecked
-                                ? 'bg-teal-50 border-teal-200 text-teal-900'
-                                : 'bg-white border-stone-300 text-stone-700'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => handleToggleStageItem(category, item)}
-                              className="rounded text-teal-700"
-                            />
-                            {item}
-                          </label>
-                        )
-                      })}
+                          return (
+                            <div
+                              key={item}
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-medium ${
+                                isHidden
+                                  ? 'bg-stone-100 border-stone-300 text-stone-500'
+                                  : isChecked
+                                    ? 'bg-teal-50 border-teal-200 text-teal-900'
+                                    : 'bg-white border-stone-300 text-stone-700'
+                              }`}
+                            >
+                              <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => handleToggleStageItem(category, item)}
+                                  className="rounded text-teal-700"
+                                  disabled={isHidden}
+                                />
+                                {item}
+                              </label>
+                              {stage.allowHideItems && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleItemVisibility(category, item)}
+                                  className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                                    isHidden
+                                      ? 'border-amber-300 bg-amber-50 text-amber-800'
+                                      : 'border-stone-300 bg-white text-stone-600'
+                                  }`}
+                                >
+                                  {isHidden ? '已隱藏' : '客人可見'}
+                                </button>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>

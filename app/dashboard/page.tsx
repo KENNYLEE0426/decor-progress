@@ -1,7 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { INITIAL_STAGES } from '@/lib/stages'
+import {
+  INITIAL_STAGES,
+  calculateStageProgress,
+  getVisibleItems,
+  isCategoryEnabled,
+  isItemChecked,
+  isRenovationProject,
+  mergeStageState,
+} from '@/lib/stages'
 
 interface ProgressLog {
   id: string
@@ -16,6 +24,7 @@ interface Project {
   address: string
   client_name?: string | null
   status: string
+  project_type?: string | null
   stages_state?: Record<string, any>
 }
 
@@ -141,11 +150,6 @@ export default function DashboardPage() {
     })
   }
 
-  const isItemChecked = (category: string, item: string, state: Record<string, any>) => {
-    if (!state?.[category]?.items) return false
-    return state[category].items[item] === true
-  }
-
   const toggleLog = (id: string) => {
     setExpandedLogIds((prev) => {
       const next = new Set(prev)
@@ -169,25 +173,9 @@ export default function DashboardPage() {
     )
   }
 
-  const stagesState = project?.stages_state || {}
-
-  let totalStageItemsCount = 0
-  let completedStageItemsCount = 0
-
-  INITIAL_STAGES.forEach((stage) => {
-    const isCategoryEnabled = stagesState[stage.category]?.enabled ?? true
-    if (isCategoryEnabled) {
-      stage.items.forEach((item) => {
-        totalStageItemsCount++
-        if (isItemChecked(stage.category, item, stagesState)) {
-          completedStageItemsCount++
-        }
-      })
-    }
-  })
-
-  const currentProgress =
-    totalStageItemsCount > 0 ? Math.round((completedStageItemsCount / totalStageItemsCount) * 100) : 0
+  const stagesState = mergeStageState(project?.stages_state || {})
+  const showStageProgress = isRenovationProject(project?.project_type)
+  const { percent: currentProgress } = calculateStageProgress(stagesState)
 
   const totalAmount = receipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
   const currentSelectedPhase = phases.find((p) => p.id === selectedPhaseId)
@@ -225,18 +213,22 @@ export default function DashboardPage() {
                     </p>
                   )}
                 </div>
-                <div className="sm:text-right">
-                  <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-400">整體進度</span>
-                  <p className="text-3xl font-semibold tabular-nums text-teal-800 mt-0.5">{currentProgress}%</p>
-                </div>
+                {showStageProgress && (
+                  <div className="sm:text-right">
+                    <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-stone-400">整體進度</span>
+                    <p className="text-3xl font-semibold tabular-nums text-teal-800 mt-0.5">{currentProgress}%</p>
+                  </div>
+                )}
               </div>
 
-              <div className="mt-4 h-2 w-full rounded-full bg-stone-200 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-teal-700 transition-all duration-700 ease-out"
-                  style={{ width: `${currentProgress}%` }}
-                />
-              </div>
+              {showStageProgress && (
+                <div className="mt-4 h-2 w-full rounded-full bg-stone-200 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-teal-700 transition-all duration-700 ease-out"
+                    style={{ width: `${currentProgress}%` }}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="px-5 sm:px-6 py-2 border-b border-stone-100">
@@ -462,7 +454,7 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {project && (
+        {project && showStageProgress && (
           <section className="bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
             <div className="px-5 sm:px-6 py-2">
               <button
@@ -482,13 +474,14 @@ export default function DashboardPage() {
               {showStageDetails && (
                 <div className="pb-5 space-y-3 max-h-[500px] overflow-y-auto pr-1">
                   {INITIAL_STAGES.map((stage) => {
-                    const isCategoryEnabled = stagesState[stage.category]?.enabled ?? true
-                    if (!isCategoryEnabled) return null
+                    if (!isCategoryEnabled(stage.category, stagesState)) return null
+                    const visibleItems = getVisibleItems(stage, stagesState)
+                    if (visibleItems.length === 0) return null
 
-                    const categoryCompletedCount = stage.items.filter((item) =>
+                    const categoryCompletedCount = visibleItems.filter((item) =>
                       isItemChecked(stage.category, item, stagesState)
                     ).length
-                    const isFullyCompleted = categoryCompletedCount === stage.items.length
+                    const isFullyCompleted = categoryCompletedCount === visibleItems.length
 
                     return (
                       <div key={stage.category} className="border border-stone-200 rounded-lg p-4 bg-stone-50/70">
@@ -503,12 +496,12 @@ export default function DashboardPage() {
                                   : 'bg-stone-200/80 text-stone-500'
                             }`}
                           >
-                            {categoryCompletedCount} / {stage.items.length}
+                            {categoryCompletedCount} / {visibleItems.length}
                           </span>
                         </div>
 
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {stage.items.map((item) => {
+                          {visibleItems.map((item) => {
                             const isChecked = isItemChecked(stage.category, item, stagesState)
                             return (
                               <div
