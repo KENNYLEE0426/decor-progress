@@ -229,8 +229,11 @@ export default function DashboardPage() {
                 className="w-full flex justify-between items-center py-3 text-sm font-semibold text-stone-800 hover:text-teal-800 transition"
               >
                 <span>材料收費明細</span>
-                <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2.5 py-1 rounded">
-                  {showReceipts ? '收起' : '展開'}
+                <span
+                  className="inline-flex items-center justify-center w-7 h-7 rounded border border-stone-200 bg-stone-50 text-base font-semibold text-stone-700 leading-none"
+                  aria-hidden="true"
+                >
+                  {showReceipts ? '－' : '＋'}
                 </span>
               </button>
 
@@ -314,7 +317,136 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+          </section>
+        )}
 
+        <section className="bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
+          <div className="px-5 sm:px-6 py-3 border-b border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setShowLogsSection(!showLogsSection)}
+              className="flex items-center justify-between sm:justify-start gap-3 text-left w-full sm:w-auto"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <h3 className="text-base font-semibold text-stone-900">施工動態紀錄</h3>
+                <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
+                  {logs.length} 筆
+                </span>
+              </div>
+              <span
+                className="inline-flex items-center justify-center w-7 h-7 rounded border border-stone-200 bg-stone-50 text-base font-semibold text-stone-700 leading-none flex-shrink-0"
+                aria-hidden="true"
+              >
+                {showLogsSection ? '－' : '＋'}
+              </span>
+            </button>
+
+            {showLogsSection && logs.length > 0 && (
+              <div className="flex items-center gap-2 text-[11px]">
+                <button
+                  type="button"
+                  onClick={expandAllLogs}
+                  className="px-2.5 py-1 rounded border border-stone-200 text-stone-600 hover:bg-stone-50 transition"
+                >
+                  全部展開
+                </button>
+                <button
+                  type="button"
+                  onClick={collapseAllLogs}
+                  className="px-2.5 py-1 rounded border border-stone-200 text-stone-600 hover:bg-stone-50 transition"
+                >
+                  全部收起
+                </button>
+              </div>
+            )}
+          </div>
+
+          {showLogsSection && (
+            <div className="divide-y divide-stone-100">
+              {logs.length === 0 ? (
+                <div className="px-5 py-10 text-center text-sm text-stone-400">尚未發布任何施工日誌</div>
+              ) : (
+                logs.map((log) => {
+                  const displayContent = log.description || ''
+                  const photos = log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls : []
+                  const isOpen = expandedLogIds.has(log.id)
+                  const preview =
+                    displayContent.length > 48 ? `${displayContent.slice(0, 48)}…` : displayContent
+
+                  return (
+                    <article key={log.id} className="bg-white">
+                      <button
+                        type="button"
+                        onClick={() => toggleLog(log.id)}
+                        className="w-full px-5 sm:px-6 py-4 flex items-start justify-between gap-3 text-left hover:bg-stone-50/80 transition"
+                      >
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <h4 className="text-sm font-semibold text-stone-900">
+                              {log.title || '現場施工進度'}
+                            </h4>
+                            <time className="text-[11px] text-stone-400 tabular-nums">
+                              {formatDate(log.created_at)}
+                            </time>
+                          </div>
+                          {!isOpen && (
+                            <p className="text-xs text-stone-500 truncate">
+                              {preview || (photos.length > 0 ? `${photos.length} 張現場照片` : '無內容摘要')}
+                            </p>
+                          )}
+                        </div>
+                        <span
+                          className="inline-flex items-center justify-center w-7 h-7 rounded border border-stone-200 bg-stone-50 text-base font-semibold text-stone-700 leading-none flex-shrink-0 mt-0.5"
+                          aria-hidden="true"
+                        >
+                          {isOpen ? '－' : '＋'}
+                        </span>
+                      </button>
+
+                      {isOpen && (
+                        <div className="px-5 sm:px-6 pb-5 space-y-3">
+                          {displayContent && (
+                            <p className="text-sm leading-relaxed text-stone-600 bg-stone-50 p-3.5 rounded-lg border border-stone-100 whitespace-pre-line">
+                              {displayContent}
+                            </p>
+                          )}
+
+                          {photos.length > 0 && (
+                            <div className="space-y-2">
+                              <span className="text-[11px] font-medium uppercase tracking-wider text-stone-400">
+                                現場照片 · {photos.length}
+                              </span>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
+                                {photos.map((url, index) => (
+                                  <button
+                                    key={index}
+                                    type="button"
+                                    onClick={() => setActiveImage(url)}
+                                    className="relative aspect-square bg-stone-100 rounded-lg overflow-hidden border border-stone-200 hover:opacity-90 transition"
+                                  >
+                                    <img
+                                      src={url}
+                                      alt={`施工照片 ${index + 1}`}
+                                      className="w-full h-full object-cover"
+                                      loading="lazy"
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </article>
+                  )
+                })
+              )}
+            </div>
+          )}
+        </section>
+
+        {project && (
+          <section className="bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
             <div className="px-5 sm:px-6 py-2">
               <button
                 type="button"
@@ -322,8 +454,11 @@ export default function DashboardPage() {
                 className="w-full flex justify-between items-center py-3 text-sm font-semibold text-stone-800 hover:text-teal-800 transition"
               >
                 <span>各項工序完成度</span>
-                <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2.5 py-1 rounded">
-                  {showStageDetails ? '收起' : '展開'}
+                <span
+                  className="inline-flex items-center justify-center w-7 h-7 rounded border border-stone-200 bg-stone-50 text-base font-semibold text-stone-700 leading-none"
+                  aria-hidden="true"
+                >
+                  {showStageDetails ? '－' : '＋'}
                 </span>
               </button>
 
@@ -385,137 +520,6 @@ export default function DashboardPage() {
             </div>
           </section>
         )}
-
-        <section className="bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
-          <div className="px-5 sm:px-6 py-3 border-b border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => setShowLogsSection(!showLogsSection)}
-              className="flex items-center justify-between sm:justify-start gap-3 text-left"
-            >
-              <h3 className="text-base font-semibold text-stone-900">施工動態紀錄</h3>
-              <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
-                {logs.length} 筆
-              </span>
-            </button>
-
-            {showLogsSection && logs.length > 0 && (
-              <div className="flex items-center gap-2 text-[11px]">
-                <button
-                  type="button"
-                  onClick={expandAllLogs}
-                  className="px-2.5 py-1 rounded border border-stone-200 text-stone-600 hover:bg-stone-50 transition"
-                >
-                  全部展開
-                </button>
-                <button
-                  type="button"
-                  onClick={collapseAllLogs}
-                  className="px-2.5 py-1 rounded border border-stone-200 text-stone-600 hover:bg-stone-50 transition"
-                >
-                  全部收起
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowLogsSection(false)}
-                  className="px-2.5 py-1 rounded bg-stone-100 text-stone-600 hover:bg-stone-200 transition sm:hidden"
-                >
-                  收起區塊
-                </button>
-              </div>
-            )}
-
-            {!showLogsSection && (
-              <button
-                type="button"
-                onClick={() => setShowLogsSection(true)}
-                className="text-[11px] font-medium text-teal-800 hover:underline self-start sm:self-auto"
-              >
-                展開區塊
-              </button>
-            )}
-          </div>
-
-          {showLogsSection && (
-            <div className="divide-y divide-stone-100">
-              {logs.length === 0 ? (
-                <div className="px-5 py-10 text-center text-sm text-stone-400">尚未發布任何施工日誌</div>
-              ) : (
-                logs.map((log) => {
-                  const displayContent = log.description || ''
-                  const photos = log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls : []
-                  const isOpen = expandedLogIds.has(log.id)
-                  const preview =
-                    displayContent.length > 48 ? `${displayContent.slice(0, 48)}…` : displayContent
-
-                  return (
-                    <article key={log.id} className="bg-white">
-                      <button
-                        type="button"
-                        onClick={() => toggleLog(log.id)}
-                        className="w-full px-5 sm:px-6 py-4 flex items-start justify-between gap-3 text-left hover:bg-stone-50/80 transition"
-                      >
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <h4 className="text-sm font-semibold text-stone-900">
-                              {log.title || '現場施工進度'}
-                            </h4>
-                            <time className="text-[11px] text-stone-400 tabular-nums">
-                              {formatDate(log.created_at)}
-                            </time>
-                          </div>
-                          {!isOpen && (
-                            <p className="text-xs text-stone-500 truncate">
-                              {preview || (photos.length > 0 ? `${photos.length} 張現場照片` : '無內容摘要')}
-                            </p>
-                          )}
-                        </div>
-                        <span className="text-[11px] font-medium text-stone-500 mt-0.5 flex-shrink-0">
-                          {isOpen ? '收起' : '展開'}
-                        </span>
-                      </button>
-
-                      {isOpen && (
-                        <div className="px-5 sm:px-6 pb-5 space-y-3">
-                          {displayContent && (
-                            <p className="text-sm leading-relaxed text-stone-600 bg-stone-50 p-3.5 rounded-lg border border-stone-100 whitespace-pre-line">
-                              {displayContent}
-                            </p>
-                          )}
-
-                          {photos.length > 0 && (
-                            <div className="space-y-2">
-                              <span className="text-[11px] font-medium uppercase tracking-wider text-stone-400">
-                                現場照片 · {photos.length}
-                              </span>
-                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
-                                {photos.map((url, index) => (
-                                  <button
-                                    key={index}
-                                    type="button"
-                                    onClick={() => setActiveImage(url)}
-                                    className="relative aspect-square bg-stone-100 rounded-lg overflow-hidden border border-stone-200 hover:opacity-90 transition"
-                                  >
-                                    <img
-                                      src={url}
-                                      alt={`施工照片 ${index + 1}`}
-                                      className="w-full h-full object-cover"
-                                      loading="lazy"
-                                    />
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </article>
-                  )
-                })
-              )}
-            </div>
-          )}
-        </section>
       </main>
 
       <div className="fixed bottom-5 right-4 z-40 flex flex-col items-end gap-2">

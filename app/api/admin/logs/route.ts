@@ -32,6 +32,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '請輸入施工進度描述' }, { status: 400 })
     }
 
+    photoUrls = photoUrls.filter(Boolean).slice(0, 5)
+
     const supabase = createServiceClient()
     const { error } = await supabase.from('progress_logs').insert({
       project_id: projectId,

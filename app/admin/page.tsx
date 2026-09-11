@@ -81,9 +81,20 @@ export default function AdminPage() {
 
   const [logs, setLogs] = useState<ProgressLog[]>([])
   const [logContent, setLogContent] = useState('')
-  const [logFile, setLogFile] = useState<File | null>(null)
+  const [logFiles, setLogFiles] = useState<File[]>([])
+  const [logFilePreviews, setLogFilePreviews] = useState<string[]>([])
   const [isUploadingLog, setIsUploadingLog] = useState(false)
   const [logStatusMsg, setLogStatusMsg] = useState('')
+
+  const MAX_LOG_PHOTOS = 5
+
+  useEffect(() => {
+    const urls = logFiles.map((f) => URL.createObjectURL(f))
+    setLogFilePreviews(urls)
+    return () => {
+      urls.forEach((u) => URL.revokeObjectURL(u))
+    }
+  }, [logFiles])
 
   const [stageState, setStageState] = useState<StageState>({})
   const [isSavingStages, setIsSavingStages] = useState(false)
@@ -267,10 +278,13 @@ export default function AdminPage() {
     setLogStatusMsg('處理中…')
 
     try {
-      let photoUrl = ''
-      if (logFile) {
-        setLogStatusMsg('上傳相片中…')
-        photoUrl = await uploadAdminPhoto(logFile, 'logs')
+      const photoUrls: string[] = []
+      if (logFiles.length > 0) {
+        for (let i = 0; i < logFiles.length; i++) {
+          setLogStatusMsg(`上傳相片中…（${i + 1}/${logFiles.length}）`)
+          const url = await uploadAdminPhoto(logFiles[i], 'logs')
+          photoUrls.push(url)
+        }
       }
 
       const res = await fetch('/api/admin/logs', {
@@ -279,7 +293,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           projectId: selectedProjectId,
           description: logContent,
-          photoUrl,
+          photo_urls: photoUrls,
         }),
       })
       const { data } = await readJsonSafe(res)
@@ -287,13 +301,26 @@ export default function AdminPage() {
 
       setLogStatusMsg('施工動態新增成功')
       setLogContent('')
-      setLogFile(null)
+      setLogFiles([])
       await loadProjectData(selectedProjectId)
     } catch (err: any) {
       setLogStatusMsg(`新增失敗：${err.message || '未知錯誤'}`)
     } finally {
       setIsUploadingLog(false)
     }
+  }
+
+  const handlePickLogFiles = (fileList: FileList | null) => {
+    if (!fileList) return
+    const incoming = Array.from(fileList).filter((f) => f.type.startsWith('image/'))
+    setLogFiles((prev) => {
+      const merged = [...prev, ...incoming].slice(0, MAX_LOG_PHOTOS)
+      return merged
+    })
+  }
+
+  const removeLogFile = (index: number) => {
+    setLogFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleDeleteLog = async (logId: string) => {
@@ -480,13 +507,41 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className={labelClass}>現場相片（可選）</label>
+                <label className={labelClass}>現場相片（可選，最多 {MAX_LOG_PHOTOS} 張）</label>
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => setLogFile(e.target.files?.[0] || null)}
+                  multiple
+                  onChange={(e) => {
+                    handlePickLogFiles(e.target.files)
+                    e.target.value = ''
+                  }}
                   className={`${inputClass} file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:bg-stone-200 file:text-stone-700 file:text-xs`}
                 />
+                {logFiles.length > 0 && (
+                  <div className="mt-3 grid grid-cols-5 gap-2">
+                    {logFiles.map((file, index) => (
+                      <div key={`${file.name}-${file.size}-${index}`} className="relative aspect-square">
+                        <img
+                          src={logFilePreviews[index] || ''}
+                          alt={`預覽 ${index + 1}`}
+                          className="w-full h-full object-cover rounded-md border border-stone-200"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeLogFile(index)}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-stone-800 text-white text-xs leading-none"
+                          aria-label="移除相片"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[11px] text-stone-400 mt-1.5">
+                  已選 {logFiles.length} / {MAX_LOG_PHOTOS} 張
+                </p>
               </div>
 
               <button type="submit" disabled={isUploadingLog} className={primaryBtnClass}>
@@ -516,7 +571,7 @@ export default function AdminPage() {
               ) : (
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                   {logs.map((log) => {
-                    const imgUrl = log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls[0] : null
+                    const photos = log.photo_urls && log.photo_urls.length > 0 ? log.photo_urls : []
                     const text = log.description || ''
 
                     return (
@@ -524,20 +579,24 @@ export default function AdminPage() {
                         key={log.id}
                         className="flex justify-between items-start bg-white p-3 rounded-lg border border-stone-200 gap-3"
                       >
-                        <div className="flex gap-3 items-start min-w-0">
-                          {imgUrl && (
-                            <img
-                              src={imgUrl}
-                              alt="Progress"
-                              className="w-12 h-12 object-cover rounded-md border border-stone-200 flex-shrink-0"
-                            />
+                        <div className="min-w-0 space-y-2 flex-1">
+                          <p className="text-sm font-medium text-stone-900 whitespace-pre-wrap">{text}</p>
+                          {photos.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {photos.map((url, i) => (
+                                <img
+                                  key={i}
+                                  src={url}
+                                  alt={`Progress ${i + 1}`}
+                                  className="w-12 h-12 object-cover rounded-md border border-stone-200"
+                                />
+                              ))}
+                            </div>
                           )}
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-stone-900 whitespace-pre-wrap">{text}</p>
-                            <p className="text-[11px] text-stone-400 mt-1 tabular-nums">
-                              {new Date(log.created_at).toLocaleString('zh-HK')}
-                            </p>
-                          </div>
+                          <p className="text-[11px] text-stone-400 tabular-nums">
+                            {new Date(log.created_at).toLocaleString('zh-HK')}
+                            {photos.length > 0 ? ` · ${photos.length} 張相` : ''}
+                          </p>
                         </div>
                         <button onClick={() => handleDeleteLog(log.id)} className={`${dangerBtnClass} flex-shrink-0`}>
                           刪除
