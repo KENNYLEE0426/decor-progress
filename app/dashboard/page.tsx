@@ -36,6 +36,14 @@ interface Receipt {
   created_at: string
 }
 
+interface WeeklyReport {
+  id: string
+  title: string
+  report_date?: string | null
+  image_url: string
+  created_at: string
+}
+
 export default function DashboardPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [logs, setLogs] = useState<ProgressLog[]>([])
@@ -48,6 +56,8 @@ export default function DashboardPage() {
   const [phases, setPhases] = useState<PaymentPhase[]>([])
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>('')
   const [receipts, setReceipts] = useState<Receipt[]>([])
+  const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>([])
+  const [showWeeklyReports, setShowWeeklyReports] = useState(true)
   const [showWhatsApp, setShowWhatsApp] = useState(true)
 
   useEffect(() => {
@@ -89,6 +99,7 @@ export default function DashboardPage() {
     setPhases(data.phases || [])
     setSelectedPhaseId(data.selectedPhaseId || '')
     setReceipts(data.receipts || [])
+    setWeeklyReports(data.weeklyReports || [])
     setExpandedLogIds((prev) => {
       if (prev.size > 0) {
         const valid = new Set([...prev].filter((id) => nextLogs.some((l) => l.id === id)))
@@ -526,6 +537,61 @@ export default function DashboardPage() {
             </div>
           </section>
         )}
+
+        <section className="bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
+          <div className="px-5 sm:px-6 py-2">
+            <button
+              type="button"
+              onClick={() => setShowWeeklyReports(!showWeeklyReports)}
+              className="w-full flex justify-between items-center py-3 text-sm font-semibold text-stone-800 hover:text-teal-800 transition"
+            >
+              <span className="flex items-center gap-2">
+                週期工作進度報告
+                <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
+                  {weeklyReports.length} 份
+                </span>
+              </span>
+              <span
+                className="inline-flex items-center justify-center w-7 h-7 rounded border border-stone-200 bg-stone-50 text-base font-semibold text-stone-700 leading-none"
+                aria-hidden="true"
+              >
+                {showWeeklyReports ? '－' : '＋'}
+              </span>
+            </button>
+
+            {showWeeklyReports && (
+              <div className="pb-5 space-y-2">
+                {weeklyReports.length === 0 ? (
+                  <p className="text-xs text-stone-400 text-center py-6">暫未上載週期報告</p>
+                ) : (
+                  weeklyReports.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setActiveImage(r.image_url)}
+                      className="w-full flex items-center gap-3 p-3 rounded-lg border border-stone-200 bg-stone-50/70 hover:bg-stone-50 hover:border-stone-300 transition text-left"
+                    >
+                      <img
+                        src={r.image_url}
+                        alt={r.title}
+                        className="w-16 h-16 object-cover rounded-md border border-stone-200 flex-shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-stone-900 truncate">{r.title}</p>
+                        <p className="text-[11px] text-stone-400 mt-0.5 tabular-nums">
+                          {r.report_date
+                            ? new Date(r.report_date).toLocaleDateString('zh-HK')
+                            : formatDate(r.created_at)}
+                        </p>
+                        <p className="text-[11px] text-teal-800 mt-1 font-medium">撳此查看報告圖片</p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </section>
       </main>
 
       <div className="fixed bottom-5 right-4 z-40 flex flex-col items-end gap-2">

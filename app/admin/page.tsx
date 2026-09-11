@@ -39,6 +39,15 @@ interface ProgressLog {
   created_at: string
 }
 
+interface WeeklyReport {
+  id: string
+  project_id?: string
+  title: string
+  report_date?: string | null
+  image_url: string
+  created_at: string
+}
+
 interface StageState {
   [category: string]: {
     enabled: boolean
@@ -100,6 +109,13 @@ export default function AdminPage() {
   const [stageState, setStageState] = useState<StageState>({})
   const [isSavingStages, setIsSavingStages] = useState(false)
 
+  const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>([])
+  const [reportTitle, setReportTitle] = useState('')
+  const [reportDate, setReportDate] = useState('')
+  const [reportFile, setReportFile] = useState<File | null>(null)
+  const [isUploadingReport, setIsUploadingReport] = useState(false)
+  const [reportStatusMsg, setReportStatusMsg] = useState('')
+
   useEffect(() => {
     const check = async () => {
       try {
@@ -136,8 +152,10 @@ export default function AdminPage() {
     setCurrentPhase(null)
     setReceipts([])
     setLogs([])
+    setWeeklyReports([])
     setReceiptStatusMsg('')
     setLogStatusMsg('')
+    setReportStatusMsg('')
 
     const res = await fetch(`/api/admin/projects/${projectId}/bundle`)
     if (!res.ok) {
@@ -148,6 +166,7 @@ export default function AdminPage() {
     setCurrentPhase(data.currentPhase || null)
     setReceipts(data.receipts || [])
     setLogs(data.logs || [])
+    setWeeklyReports(data.weeklyReports || [])
     setStageState(data.stages_state || {})
   }
 
@@ -392,6 +411,58 @@ export default function AdminPage() {
     } finally {
       setIsSavingStages(false)
     }
+  }
+
+  const handleAddWeeklyReport = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedProjectId || !reportTitle.trim() || !reportFile) {
+      alert('請填寫報告標題並選擇 JPG 圖片')
+      return
+    }
+
+    setIsUploadingReport(true)
+    setReportStatusMsg('上傳報告中…')
+
+    try {
+      const imageUrl = await uploadAdminPhoto(reportFile, 'reports')
+      const res = await fetch('/api/admin/weekly-reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: selectedProjectId,
+          title: reportTitle.trim(),
+          reportDate: reportDate || null,
+          imageUrl,
+        }),
+      })
+      const { data } = await readJsonSafe(res)
+      if (!res.ok) throw new Error(data.error || '新增失敗')
+
+      setReportStatusMsg('週報新增成功')
+      setReportTitle('')
+      setReportDate('')
+      setReportFile(null)
+      await loadProjectData(selectedProjectId)
+    } catch (err: any) {
+      setReportStatusMsg(`新增失敗：${err.message || '未知錯誤'}`)
+    } finally {
+      setIsUploadingReport(false)
+    }
+  }
+
+  const handleDeleteWeeklyReport = async (id: string) => {
+    if (!confirm('確定刪除這份週期報告？')) return
+    const res = await fetch('/api/admin/weekly-reports', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    if (!res.ok) {
+      const { data } = await readJsonSafe(res)
+      alert(data.error || '刪除失敗')
+      return
+    }
+    await loadProjectData(selectedProjectId)
   }
 
   if (authChecking) {
@@ -811,6 +882,103 @@ export default function AdminPage() {
                 </div>
               )
             })}
+          </div>
+        </section>
+
+        <section className={cardClass}>
+          <div className="px-5 sm:px-6 py-4 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50">
+            <h2 className="text-base font-semibold text-stone-900">週期工作進度報告</h2>
+            <p className="text-xs text-stone-500 mt-1">上載每週 JPG 報告，前台最底可撳開睇</p>
+          </div>
+
+          <div className="px-5 sm:px-6 py-5 space-y-4">
+            <form onSubmit={handleAddWeeklyReport} className="space-y-4 bg-stone-50 p-4 rounded-lg border border-stone-200">
+              <div>
+                <label className={labelClass}>報告標題</label>
+                <input
+                  type="text"
+                  placeholder="例：第 12 週進度報告"
+                  value={reportTitle}
+                  onChange={(e) => setReportTitle(e.target.value)}
+                  className={inputClass}
+                  required
+                />
+              </div>
+              <div>
+                <label className={labelClass}>報告日期（可選）</label>
+                <input
+                  type="date"
+                  value={reportDate}
+                  onChange={(e) => setReportDate(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>報告圖片（JPG）</label>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  onChange={(e) => setReportFile(e.target.files?.[0] || null)}
+                  className={`${inputClass} file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:bg-stone-200 file:text-stone-700 file:text-xs`}
+                  required
+                />
+                {reportFile && (
+                  <p className="text-[11px] text-stone-500 mt-1.5">已選：{reportFile.name}</p>
+                )}
+              </div>
+              <button type="submit" disabled={isUploadingReport} className={primaryBtnClass}>
+                {isUploadingReport ? '上載中…' : '新增週期報告'}
+              </button>
+              {reportStatusMsg && (
+                <p
+                  className={`text-xs text-center font-medium ${
+                    reportStatusMsg.includes('失敗') ? 'text-red-700' : 'text-teal-800'
+                  }`}
+                >
+                  {reportStatusMsg}
+                </p>
+              )}
+            </form>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-stone-900">
+                已上載報告
+                <span className="ml-2 text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
+                  {weeklyReports.length} 份
+                </span>
+              </h3>
+              {weeklyReports.length === 0 ? (
+                <p className="text-xs text-stone-400 py-2">暫無週期報告</p>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {weeklyReports.map((r) => (
+                    <div
+                      key={r.id}
+                      className="flex items-center justify-between gap-3 bg-white p-3 rounded-lg border border-stone-200"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <img
+                          src={r.image_url}
+                          alt={r.title}
+                          className="w-14 h-14 object-cover rounded-md border border-stone-200 flex-shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-stone-900 truncate">{r.title}</p>
+                          <p className="text-[11px] text-stone-400 tabular-nums">
+                            {r.report_date
+                              ? new Date(r.report_date).toLocaleDateString('zh-HK')
+                              : new Date(r.created_at).toLocaleDateString('zh-HK')}
+                          </p>
+                        </div>
+                      </div>
+                      <button onClick={() => handleDeleteWeeklyReport(r.id)} className={dangerBtnClass}>
+                        刪除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </section>
       </main>

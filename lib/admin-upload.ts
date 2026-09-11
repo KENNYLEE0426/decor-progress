@@ -24,8 +24,13 @@ export async function compressImage(file: File, maxEdge = 1600, quality = 0.8): 
   return new File([blob], name, { type: 'image/jpeg' })
 }
 
-export async function uploadAdminPhoto(file: File, folder: 'logs' | 'receipts'): Promise<string> {
-  const compressed = await compressImage(file)
+export async function uploadAdminPhoto(
+  file: File,
+  folder: 'logs' | 'receipts' | 'reports'
+): Promise<string> {
+  // 週報需要睇得清文字，用較大尺寸
+  const compressed =
+    folder === 'reports' ? await compressImage(file, 2800, 0.88) : await compressImage(file)
   const metaRes = await fetch('/api/admin/upload', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -11,7 +11,8 @@ export async function POST(request: Request) {
     const contentType = String(body.contentType || 'image/jpeg')
     const originalName = String(body.fileName || 'photo.jpg')
     const fileExt = originalName.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '') || 'jpg'
-    const safeFolder = folder === 'receipts' ? 'receipts' : 'logs'
+    const allowed = new Set(['logs', 'receipts', 'reports'])
+    const safeFolder = allowed.has(folder) ? folder : 'logs'
     const filePath = `${safeFolder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`
 
     const supabase = createServiceClient()
