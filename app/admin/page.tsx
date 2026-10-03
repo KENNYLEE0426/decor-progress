@@ -106,8 +106,10 @@ export default function AdminPage() {
   const [receiptAmount, setReceiptAmount] = useState('')
   const [receiptDescription, setReceiptDescription] = useState('')
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [receiptPublishedAt, setReceiptPublishedAt] = useState(toHongKongDatetimeLocal())
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false)
   const [receiptStatusMsg, setReceiptStatusMsg] = useState('')
+  const [contentTab, setContentTab] = useState<'receipts' | 'logs' | 'reports'>('receipts')
 
   const [logs, setLogs] = useState<ProgressLog[]>([])
   const [logContent, setLogContent] = useState('')
@@ -259,6 +261,7 @@ export default function AdminPage() {
           amount: receiptAmount,
           description: receiptDescription,
           photoUrl,
+          createdAt: hongKongDatetimeLocalToIso(receiptPublishedAt) || undefined,
         }),
       })
       const { data } = await readJsonSafe(res)
@@ -268,6 +271,7 @@ export default function AdminPage() {
       setReceiptAmount('')
       setReceiptDescription('')
       setReceiptFile(null)
+      setReceiptPublishedAt(toHongKongDatetimeLocal())
       await loadProjectData(selectedProjectId)
     } catch (err: any) {
       setReceiptStatusMsg(`新增失敗：${err.message || '未知錯誤'}`)
@@ -677,7 +681,35 @@ export default function AdminPage() {
         </section>
 
         <section className={cardClass}>
-          <div className="px-5 sm:px-6 py-4 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50">
+          <div className="px-3 sm:px-4 pt-3">
+            <div className="flex gap-1 p-1 rounded-lg bg-stone-100">
+              {(
+                [
+                  ['receipts', '材料收費', receipts.length],
+                  ['logs', '施工動態', logs.length],
+                  ['reports', '週期報告', weeklyReports.length],
+                ] as const
+              ).map(([id, label, count]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setContentTab(id)}
+                  className={`flex-1 min-w-0 px-2 py-2 text-xs sm:text-sm font-semibold rounded-md transition ${
+                    contentTab === id
+                      ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
+                      : 'text-stone-500 hover:text-stone-800'
+                  }`}
+                >
+                  {label}
+                  <span className="ml-1 tabular-nums text-[10px] font-medium text-stone-400">{count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {contentTab === 'logs' && (
+            <>
+          <div className="px-5 sm:px-6 py-4 border-b border-stone-100">
             <h2 className="text-base font-semibold text-stone-900">新增施工動態</h2>
             <p className="text-xs text-stone-500 mt-1">發佈進度說明與現場照片</p>
           </div>
@@ -810,10 +842,12 @@ export default function AdminPage() {
               )}
             </div>
           </div>
-        </section>
+            </>
+          )}
 
-        <section className={cardClass}>
-          <div className="px-5 sm:px-6 py-4 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          {contentTab === 'receipts' && (
+            <>
+        <div className="px-5 sm:px-6 py-4 border-b border-stone-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
               <h2 className="text-base font-semibold text-stone-900">材料收費管理</h2>
               <p className="text-xs text-teal-800 font-medium mt-1">
@@ -869,6 +903,18 @@ export default function AdminPage() {
                       className={`${inputClass} file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-stone-200 file:text-stone-700 file:text-xs`}
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className={labelClass}>單據日期與時間</label>
+                  <input
+                    type="datetime-local"
+                    value={receiptPublishedAt}
+                    onChange={(e) => setReceiptPublishedAt(e.target.value)}
+                    className={inputClass}
+                    required
+                  />
+                  <p className="text-[11px] text-stone-400 mt-1.5">預設而家時間，可改成單據當日（香港時間）</p>
                 </div>
 
                 <div>
@@ -932,7 +978,7 @@ export default function AdminPage() {
                             <span className="text-stone-500">[{r.category}]</span> {r.description || '無備註'}
                           </p>
                           <p className="text-[11px] text-stone-400 tabular-nums">
-                            {new Date(r.created_at).toLocaleDateString('zh-HK')}
+                            {new Date(r.created_at).toLocaleString('zh-HK')}
                           </p>
                         </div>
                       </div>
@@ -949,6 +995,118 @@ export default function AdminPage() {
               )}
             </div>
           </div>
+            </>
+          )}
+
+          {contentTab === 'reports' && (
+            <>
+              <div className="px-5 sm:px-6 py-4 border-b border-stone-100">
+                <h2 className="text-base font-semibold text-stone-900">週期工作進度報告</h2>
+                <p className="text-xs text-stone-500 mt-1">上載每週 PDF 報告，前台可撳開睇</p>
+              </div>
+
+              <div className="px-5 sm:px-6 py-5 space-y-4">
+                <form onSubmit={handleAddWeeklyReport} className="space-y-4 bg-stone-50 p-4 rounded-lg border border-stone-200">
+                  <div>
+                    <label className={labelClass}>報告標題</label>
+                    <input
+                      type="text"
+                      placeholder="例：第 12 週進度報告"
+                      value={reportTitle}
+                      onChange={(e) => setReportTitle(e.target.value)}
+                      className={inputClass}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>報告日期（可選）</label>
+                    <input
+                      type="date"
+                      value={reportDate}
+                      onChange={(e) => setReportDate(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>報告檔案（PDF）</label>
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      onChange={(e) => setReportFile(e.target.files?.[0] || null)}
+                      className={`${inputClass} file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:bg-stone-200 file:text-stone-700 file:text-xs`}
+                      required
+                    />
+                    {reportFile && (
+                      <p className="text-[11px] text-stone-500 mt-1.5">已選：{reportFile.name}</p>
+                    )}
+                  </div>
+                  <button type="submit" disabled={isUploadingReport} className={primaryBtnClass}>
+                    {isUploadingReport ? '上載中…' : '新增週期報告'}
+                  </button>
+                  {reportStatusMsg && (
+                    <p
+                      className={`text-xs text-center font-medium ${
+                        reportStatusMsg.includes('失敗') ? 'text-red-700' : 'text-teal-800'
+                      }`}
+                    >
+                      {reportStatusMsg}
+                    </p>
+                  )}
+                </form>
+
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-stone-900">
+                    已上載報告
+                    <span className="ml-2 text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
+                      {weeklyReports.length} 份
+                    </span>
+                  </h3>
+                  {weeklyReports.length === 0 ? (
+                    <p className="text-xs text-stone-400 py-2">暫無週期報告</p>
+                  ) : (
+                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                      {weeklyReports.map((r) => (
+                        <div
+                          key={r.id}
+                          className="flex items-center justify-between gap-3 bg-white p-3 rounded-lg border border-stone-200"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {isPdfUrl(r.image_url) ? (
+                              <a
+                                href={r.image_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="w-14 h-14 rounded-md border border-stone-200 bg-stone-100 flex items-center justify-center text-[11px] font-semibold text-stone-600 flex-shrink-0"
+                              >
+                                PDF
+                              </a>
+                            ) : (
+                              <img
+                                src={r.image_url}
+                                alt={r.title}
+                                className="w-14 h-14 object-cover rounded-md border border-stone-200 flex-shrink-0"
+                              />
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-stone-900 truncate">{r.title}</p>
+                              <p className="text-[11px] text-stone-400 tabular-nums">
+                                {r.report_date
+                                  ? new Date(r.report_date).toLocaleDateString('zh-HK')
+                                  : new Date(r.created_at).toLocaleDateString('zh-HK')}
+                              </p>
+                            </div>
+                          </div>
+                          <button onClick={() => handleDeleteWeeklyReport(r.id)} className={dangerBtnClass}>
+                            刪除
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </section>
 
         <section className={cardClass}>
@@ -1055,114 +1213,6 @@ export default function AdminPage() {
                 </div>
               )
             })}
-          </div>
-        </section>
-
-        <section className={cardClass}>
-          <div className="px-5 sm:px-6 py-4 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50">
-            <h2 className="text-base font-semibold text-stone-900">週期工作進度報告</h2>
-            <p className="text-xs text-stone-500 mt-1">上載每週 PDF 報告，前台最底可撳開睇</p>
-          </div>
-
-          <div className="px-5 sm:px-6 py-5 space-y-4">
-            <form onSubmit={handleAddWeeklyReport} className="space-y-4 bg-stone-50 p-4 rounded-lg border border-stone-200">
-              <div>
-                <label className={labelClass}>報告標題</label>
-                <input
-                  type="text"
-                  placeholder="例：第 12 週進度報告"
-                  value={reportTitle}
-                  onChange={(e) => setReportTitle(e.target.value)}
-                  className={inputClass}
-                  required
-                />
-              </div>
-              <div>
-                <label className={labelClass}>報告日期（可選）</label>
-                <input
-                  type="date"
-                  value={reportDate}
-                  onChange={(e) => setReportDate(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>報告檔案（PDF）</label>
-                <input
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  onChange={(e) => setReportFile(e.target.files?.[0] || null)}
-                  className={`${inputClass} file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:bg-stone-200 file:text-stone-700 file:text-xs`}
-                  required
-                />
-                {reportFile && (
-                  <p className="text-[11px] text-stone-500 mt-1.5">已選：{reportFile.name}</p>
-                )}
-              </div>
-              <button type="submit" disabled={isUploadingReport} className={primaryBtnClass}>
-                {isUploadingReport ? '上載中…' : '新增週期報告'}
-              </button>
-              {reportStatusMsg && (
-                <p
-                  className={`text-xs text-center font-medium ${
-                    reportStatusMsg.includes('失敗') ? 'text-red-700' : 'text-teal-800'
-                  }`}
-                >
-                  {reportStatusMsg}
-                </p>
-              )}
-            </form>
-
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-stone-900">
-                已上載報告
-                <span className="ml-2 text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
-                  {weeklyReports.length} 份
-                </span>
-              </h3>
-              {weeklyReports.length === 0 ? (
-                <p className="text-xs text-stone-400 py-2">暫無週期報告</p>
-              ) : (
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {weeklyReports.map((r) => (
-                    <div
-                      key={r.id}
-                      className="flex items-center justify-between gap-3 bg-white p-3 rounded-lg border border-stone-200"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        {isPdfUrl(r.image_url) ? (
-                          <a
-                            href={r.image_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="w-14 h-14 rounded-md border border-stone-200 bg-stone-100 flex items-center justify-center text-[11px] font-semibold text-stone-600 flex-shrink-0"
-                          >
-                            PDF
-                          </a>
-                        ) : (
-                          <img
-                            src={r.image_url}
-                            alt={r.title}
-                            className="w-14 h-14 object-cover rounded-md border border-stone-200 flex-shrink-0"
-                          />
-                        )}
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-stone-900 truncate">{r.title}</p>
-                          <p className="text-[11px] text-stone-400 tabular-nums">
-                            {r.report_date
-                              ? new Date(r.report_date).toLocaleDateString('zh-HK')
-                              : new Date(r.created_at).toLocaleDateString('zh-HK')}
-                          </p>
-                        </div>
-                      </div>
-                      <button onClick={() => handleDeleteWeeklyReport(r.id)} className={dangerBtnClass}>
-                        刪除
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         </section>
       </main>

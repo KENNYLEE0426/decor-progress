@@ -61,14 +61,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [activeImage, setActiveImage] = useState<string | null>(null)
   const [showStageDetails, setShowStageDetails] = useState(true)
-  const [showReceipts, setShowReceipts] = useState(true)
-  const [showLogsSection, setShowLogsSection] = useState(true)
+  const [contentTab, setContentTab] = useState<'receipts' | 'logs' | 'reports'>('receipts')
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
   const [phases, setPhases] = useState<PaymentPhase[]>([])
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>('')
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>([])
-  const [showWeeklyReports, setShowWeeklyReports] = useState(true)
   const [showWhatsApp, setShowWhatsApp] = useState(true)
 
   useEffect(() => {
@@ -232,24 +230,38 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+          </section>
+        )}
 
-            <div className="px-5 sm:px-6 py-2 border-b border-stone-100">
-              <button
-                type="button"
-                onClick={() => setShowReceipts(!showReceipts)}
-                className="w-full flex justify-between items-center py-3 text-sm font-semibold text-stone-800 hover:text-teal-800 transition"
-              >
-                <span>材料收費明細</span>
-                <span
-                  className="inline-flex items-center justify-center w-7 h-7 rounded border border-stone-200 bg-stone-50 text-base font-semibold text-stone-700 leading-none"
-                  aria-hidden="true"
+        <section className="bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
+          <div className="px-3 sm:px-4 pt-3">
+            <div className="flex gap-1 p-1 rounded-lg bg-stone-100">
+              {(
+                [
+                  ['receipts', '材料收費', receipts.length],
+                  ['logs', '施工動態', logs.length],
+                  ['reports', '週期報告', weeklyReports.length],
+                ] as const
+              ).map(([id, label, count]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setContentTab(id)}
+                  className={`flex-1 min-w-0 px-2 py-2 text-xs sm:text-sm font-semibold rounded-md transition ${
+                    contentTab === id
+                      ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
+                      : 'text-stone-500 hover:text-stone-800'
+                  }`}
                 >
-                  {showReceipts ? '－' : '＋'}
-                </span>
-              </button>
+                  {label}
+                  <span className="ml-1 tabular-nums text-[10px] font-medium text-stone-400">{count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
 
-              {showReceipts && (
-                <div className="pb-5 space-y-3">
+          {contentTab === 'receipts' && (
+            <div className="px-5 sm:px-6 py-5 space-y-3">
                   <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-stone-50 p-3.5 rounded-lg border border-stone-200">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium text-stone-500">期數</span>
@@ -325,34 +337,20 @@ export default function DashboardPage() {
                       ))
                     )}
                   </div>
-                </div>
-              )}
             </div>
-          </section>
-        )}
+          )}
 
-        <section className="bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
+          {contentTab === 'logs' && (
+            <>
           <div className="px-5 sm:px-6 py-3 border-b border-stone-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => setShowLogsSection(!showLogsSection)}
-              className="flex items-center justify-between sm:justify-start gap-3 text-left w-full sm:w-auto"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <h3 className="text-base font-semibold text-stone-900">施工動態紀錄</h3>
-                <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
-                  {logs.length} 筆
-                </span>
-              </div>
-              <span
-                className="inline-flex items-center justify-center w-7 h-7 rounded border border-stone-200 bg-stone-50 text-base font-semibold text-stone-700 leading-none flex-shrink-0"
-                aria-hidden="true"
-              >
-                {showLogsSection ? '－' : '＋'}
+            <div className="flex items-center gap-3 min-w-0">
+              <h3 className="text-base font-semibold text-stone-900">施工動態紀錄</h3>
+              <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
+                {logs.length} 筆
               </span>
-            </button>
+            </div>
 
-            {showLogsSection && logs.length > 0 && (
+            {logs.length > 0 && (
               <div className="flex items-center gap-2 text-[11px]">
                 <button
                   type="button"
@@ -372,8 +370,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {showLogsSection && (
-            <div className="divide-y divide-stone-100">
+          <div className="divide-y divide-stone-100">
               {logs.length === 0 ? (
                 <div className="px-5 py-10 text-center text-sm text-stone-400">尚未發布任何施工日誌</div>
               ) : (
@@ -449,6 +446,70 @@ export default function DashboardPage() {
                         </div>
                       )}
                     </article>
+                  )
+                })
+              )}
+            </div>
+            </>
+          )}
+
+          {contentTab === 'reports' && (
+            <div className="px-5 sm:px-6 py-5 space-y-2">
+              {weeklyReports.length === 0 ? (
+                <p className="text-xs text-stone-400 text-center py-6">暫未上載週期報告</p>
+              ) : (
+                weeklyReports.map((r) => {
+                  const pdf = isPdfUrl(r.image_url)
+                  const inner = (
+                    <>
+                      {pdf ? (
+                        <div className="w-16 h-16 rounded-md border border-stone-200 bg-stone-100 flex items-center justify-center text-[11px] font-semibold text-stone-600 flex-shrink-0">
+                          PDF
+                        </div>
+                      ) : (
+                        <img
+                          src={r.image_url}
+                          alt={r.title}
+                          className="w-16 h-16 object-cover rounded-md border border-stone-200 flex-shrink-0"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-stone-900 truncate">{r.title}</p>
+                        <p className="text-[11px] text-stone-400 mt-0.5 tabular-nums">
+                          {r.report_date
+                            ? new Date(r.report_date).toLocaleDateString('zh-HK')
+                            : formatDate(r.created_at)}
+                        </p>
+                        <p className="text-[11px] text-teal-800 mt-1 font-medium">
+                          {pdf ? '撳此開啟 PDF' : '撳此查看報告圖片'}
+                        </p>
+                      </div>
+                    </>
+                  )
+
+                  if (pdf) {
+                    return (
+                      <a
+                        key={r.id}
+                        href={r.image_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-stone-200 bg-stone-50/70 hover:bg-stone-50 hover:border-stone-300 transition text-left"
+                      >
+                        {inner}
+                      </a>
+                    )
+                  }
+
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setActiveImage(r.image_url)}
+                      className="w-full flex items-center gap-3 p-3 rounded-lg border border-stone-200 bg-stone-50/70 hover:bg-stone-50 hover:border-stone-300 transition text-left"
+                    >
+                      {inner}
+                    </button>
                   )
                 })
               )}
@@ -542,91 +603,6 @@ export default function DashboardPage() {
           </section>
         )}
 
-        <section className="bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
-          <div className="px-5 sm:px-6 py-2">
-            <button
-              type="button"
-              onClick={() => setShowWeeklyReports(!showWeeklyReports)}
-              className="w-full flex justify-between items-center py-3 text-sm font-semibold text-stone-800 hover:text-teal-800 transition"
-            >
-              <span className="flex items-center gap-2">
-                週期工作進度報告
-                <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
-                  {weeklyReports.length} 份
-                </span>
-              </span>
-              <span
-                className="inline-flex items-center justify-center w-7 h-7 rounded border border-stone-200 bg-stone-50 text-base font-semibold text-stone-700 leading-none"
-                aria-hidden="true"
-              >
-                {showWeeklyReports ? '－' : '＋'}
-              </span>
-            </button>
-
-            {showWeeklyReports && (
-              <div className="pb-5 space-y-2">
-                {weeklyReports.length === 0 ? (
-                  <p className="text-xs text-stone-400 text-center py-6">暫未上載週期報告</p>
-                ) : (
-                  weeklyReports.map((r) => {
-                    const pdf = isPdfUrl(r.image_url)
-                    const inner = (
-                      <>
-                        {pdf ? (
-                          <div className="w-16 h-16 rounded-md border border-stone-200 bg-stone-100 flex items-center justify-center text-[11px] font-semibold text-stone-600 flex-shrink-0">
-                            PDF
-                          </div>
-                        ) : (
-                          <img
-                            src={r.image_url}
-                            alt={r.title}
-                            className="w-16 h-16 object-cover rounded-md border border-stone-200 flex-shrink-0"
-                          />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-stone-900 truncate">{r.title}</p>
-                          <p className="text-[11px] text-stone-400 mt-0.5 tabular-nums">
-                            {r.report_date
-                              ? new Date(r.report_date).toLocaleDateString('zh-HK')
-                              : formatDate(r.created_at)}
-                          </p>
-                          <p className="text-[11px] text-teal-800 mt-1 font-medium">
-                            {pdf ? '撳此開啟 PDF' : '撳此查看報告圖片'}
-                          </p>
-                        </div>
-                      </>
-                    )
-
-                    if (pdf) {
-                      return (
-                        <a
-                          key={r.id}
-                          href={r.image_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="w-full flex items-center gap-3 p-3 rounded-lg border border-stone-200 bg-stone-50/70 hover:bg-stone-50 hover:border-stone-300 transition text-left"
-                        >
-                          {inner}
-                        </a>
-                      )
-                    }
-
-                    return (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => setActiveImage(r.image_url)}
-                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-stone-200 bg-stone-50/70 hover:bg-stone-50 hover:border-stone-300 transition text-left"
-                      >
-                        {inner}
-                      </button>
-                    )
-                  })
-                )}
-              </div>
-            )}
-          </div>
-        </section>
       </main>
 
       <div className="fixed bottom-5 right-4 z-40 flex flex-col items-end gap-2">

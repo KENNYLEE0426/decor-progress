@@ -13,6 +13,7 @@ export async function POST(request: Request) {
     let amount = NaN
     let description = ''
     let photoUrl = ''
+    let createdAt: string | null = null
 
     if (contentType.includes('application/json')) {
       const body = await request.json()
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
       amount = parseFloat(String(body.amount || ''))
       description = String(body.description || '')
       photoUrl = String(body.photoUrl || '')
+      if (body.createdAt) createdAt = String(body.createdAt)
     } else {
       const form = await request.formData()
       projectId = String(form.get('projectId') || '')
@@ -30,10 +32,21 @@ export async function POST(request: Request) {
       amount = parseFloat(String(form.get('amount') || ''))
       description = String(form.get('description') || '')
       photoUrl = String(form.get('photoUrl') || '')
+      const createdAtField = String(form.get('createdAt') || '')
+      if (createdAtField) createdAt = createdAtField
     }
 
     if (!projectId || !phaseId || !category || Number.isNaN(amount)) {
       return NextResponse.json({ error: '缺少必要欄位' }, { status: 400 })
+    }
+
+    let createdAtIso: string | undefined
+    if (createdAt) {
+      const parsed = new Date(createdAt)
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: '單據時間格式不正確' }, { status: 400 })
+      }
+      createdAtIso = parsed.toISOString()
     }
 
     const supabase = createServiceClient()
@@ -44,6 +57,7 @@ export async function POST(request: Request) {
       amount,
       description,
       photo_url: photoUrl,
+      ...(createdAtIso ? { created_at: createdAtIso } : {}),
     })
 
     if (error) {
