@@ -60,8 +60,7 @@ export default function DashboardPage() {
   const [logs, setLogs] = useState<ProgressLog[]>([])
   const [loading, setLoading] = useState(true)
   const [activeImage, setActiveImage] = useState<string | null>(null)
-  const [showStageDetails, setShowStageDetails] = useState(true)
-  const [contentTab, setContentTab] = useState<'receipts' | 'logs' | 'reports'>('receipts')
+  const [contentTab, setContentTab] = useState<'receipts' | 'logs' | 'reports' | 'stages'>('receipts')
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
   const [phases, setPhases] = useState<PaymentPhase[]>([])
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>('')
@@ -235,11 +234,14 @@ export default function DashboardPage() {
 
         <section className="bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
           <div className="px-3 sm:px-4 pt-3">
-            <div className="flex gap-1 p-1 rounded-lg bg-stone-100">
+            <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-stone-100">
               {(
                 [
                   ['receipts', '材料收費', receipts.length],
                   ['logs', '施工動態', logs.length],
+                  ...(showStageProgress
+                    ? ([['stages', '工序進度', currentProgress]] as const)
+                    : []),
                   ['reports', '週期報告', weeklyReports.length],
                 ] as const
               ).map(([id, label, count]) => (
@@ -247,14 +249,16 @@ export default function DashboardPage() {
                   key={id}
                   type="button"
                   onClick={() => setContentTab(id)}
-                  className={`flex-1 min-w-0 px-2 py-2 text-xs sm:text-sm font-semibold rounded-md transition ${
+                  className={`flex-1 min-w-[4.5rem] px-2 py-2 text-[11px] sm:text-sm font-semibold rounded-md transition ${
                     contentTab === id
                       ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
                       : 'text-stone-500 hover:text-stone-800'
                   }`}
                 >
                   {label}
-                  <span className="ml-1 tabular-nums text-[10px] font-medium text-stone-400">{count}</span>
+                  <span className="ml-1 tabular-nums text-[10px] font-medium text-stone-400">
+                    {id === 'stages' ? `${count}%` : count}
+                  </span>
                 </button>
               ))}
             </div>
@@ -327,7 +331,9 @@ export default function DashboardPage() {
                               <p className="text-xs font-medium text-stone-800 truncate">
                                 {r.description || '無描述'}
                               </p>
-                              <p className="text-[10px] text-stone-400">{formatDate(r.created_at)}</p>
+                              <p className="text-[10px] text-stone-400">
+                                {new Date(r.created_at).toLocaleDateString('zh-HK')}
+                              </p>
                             </div>
                           </div>
                           <span className="text-sm font-semibold tabular-nums text-stone-900 flex-shrink-0">
@@ -515,93 +521,72 @@ export default function DashboardPage() {
               )}
             </div>
           )}
-        </section>
 
-        {project && showStageProgress && (
-          <section className="bg-white rounded-xl border border-stone-200/90 shadow-[0_1px_2px_rgba(28,25,23,0.04)] overflow-hidden">
-            <div className="px-5 sm:px-6 py-2">
-              <button
-                type="button"
-                onClick={() => setShowStageDetails(!showStageDetails)}
-                className="w-full flex justify-between items-center py-3 text-sm font-semibold text-stone-800 hover:text-teal-800 transition"
-              >
-                <span>各項工序完成度</span>
-                <span
-                  className="inline-flex items-center justify-center w-7 h-7 rounded border border-stone-200 bg-stone-50 text-base font-semibold text-stone-700 leading-none"
-                  aria-hidden="true"
-                >
-                  {showStageDetails ? '－' : '＋'}
-                </span>
-              </button>
+          {contentTab === 'stages' && showStageProgress && (
+            <div className="px-5 sm:px-6 py-5 space-y-3 max-h-[560px] overflow-y-auto pr-1">
+              {INITIAL_STAGES.map((stage) => {
+                if (!isCategoryEnabled(stage.category, stagesState)) return null
+                const visibleItems = getVisibleItems(stage, stagesState)
+                if (visibleItems.length === 0) return null
 
-              {showStageDetails && (
-                <div className="pb-5 space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                  {INITIAL_STAGES.map((stage) => {
-                    if (!isCategoryEnabled(stage.category, stagesState)) return null
-                    const visibleItems = getVisibleItems(stage, stagesState)
-                    if (visibleItems.length === 0) return null
+                const categoryCompletedCount = visibleItems.filter((item) =>
+                  isItemChecked(stage.category, item, stagesState)
+                ).length
+                const isFullyCompleted = categoryCompletedCount === visibleItems.length
+                const isExtra = isExtraCategory(stage.category, stagesState)
 
-                    const categoryCompletedCount = visibleItems.filter((item) =>
-                      isItemChecked(stage.category, item, stagesState)
-                    ).length
-                    const isFullyCompleted = categoryCompletedCount === visibleItems.length
-
-                    const isExtra = isExtraCategory(stage.category, stagesState)
-
-                    return (
-                      <div key={stage.category} className="border border-stone-200 rounded-lg p-4 bg-stone-50/70">
-                        <div className="flex justify-between items-center mb-2.5 gap-2">
-                          <span className="font-semibold text-stone-800 text-sm flex items-center gap-1.5">
-                            {stage.category}
-                            {isExtra && (
-                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                                後加
-                              </span>
-                            )}
+                return (
+                  <div key={stage.category} className="border border-stone-200 rounded-lg p-4 bg-stone-50/70">
+                    <div className="flex justify-between items-center mb-2.5 gap-2">
+                      <span className="font-semibold text-stone-800 text-sm flex items-center gap-1.5">
+                        {stage.category}
+                        {isExtra && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                            後加
                           </span>
-                          <span
-                            className={`text-[11px] px-2 py-0.5 rounded font-medium ${
-                              isFullyCompleted
-                                ? 'bg-teal-50 text-teal-800'
-                                : categoryCompletedCount > 0
-                                  ? 'bg-amber-50 text-amber-800'
-                                  : 'bg-stone-200/80 text-stone-500'
+                        )}
+                      </span>
+                      <span
+                        className={`text-[11px] px-2 py-0.5 rounded font-medium ${
+                          isFullyCompleted
+                            ? 'bg-teal-50 text-teal-800'
+                            : categoryCompletedCount > 0
+                              ? 'bg-amber-50 text-amber-800'
+                              : 'bg-stone-200/80 text-stone-500'
+                        }`}
+                      >
+                        {categoryCompletedCount} / {visibleItems.length}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {visibleItems.map((item) => {
+                        const isChecked = isItemChecked(stage.category, item, stagesState)
+                        return (
+                          <div
+                            key={item}
+                            className={`flex items-center gap-2 p-2 rounded-md text-xs font-medium border ${
+                              isChecked
+                                ? 'bg-teal-50/90 border-teal-200 text-teal-900'
+                                : 'bg-white border-stone-200 text-stone-400'
                             }`}
                           >
-                            {categoryCompletedCount} / {visibleItems.length}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {visibleItems.map((item) => {
-                            const isChecked = isItemChecked(stage.category, item, stagesState)
-                            return (
-                              <div
-                                key={item}
-                                className={`flex items-center gap-2 p-2 rounded-md text-xs font-medium border ${
-                                  isChecked
-                                    ? 'bg-teal-50/90 border-teal-200 text-teal-900'
-                                    : 'bg-white border-stone-200 text-stone-400'
-                                }`}
-                              >
-                                <span
-                                  className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                                    isChecked ? 'bg-teal-600' : 'bg-stone-300'
-                                  }`}
-                                />
-                                <span>{item}</span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+                            <span
+                              className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                isChecked ? 'bg-teal-600' : 'bg-stone-300'
+                              }`}
+                            />
+                            <span>{item}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
       </main>
 

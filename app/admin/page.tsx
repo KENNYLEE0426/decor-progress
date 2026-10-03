@@ -109,7 +109,7 @@ export default function AdminPage() {
   const [receiptPublishedAt, setReceiptPublishedAt] = useState(toHongKongDatetimeLocal())
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false)
   const [receiptStatusMsg, setReceiptStatusMsg] = useState('')
-  const [contentTab, setContentTab] = useState<'receipts' | 'logs' | 'reports'>('receipts')
+  const [contentTab, setContentTab] = useState<'receipts' | 'logs' | 'reports' | 'stages'>('receipts')
 
   const [logs, setLogs] = useState<ProgressLog[]>([])
   const [logContent, setLogContent] = useState('')
@@ -682,11 +682,12 @@ export default function AdminPage() {
 
         <section className={cardClass}>
           <div className="px-3 sm:px-4 pt-3">
-            <div className="flex gap-1 p-1 rounded-lg bg-stone-100">
+            <div className="flex flex-wrap gap-1 p-1 rounded-lg bg-stone-100">
               {(
                 [
                   ['receipts', '材料收費', receipts.length],
                   ['logs', '施工動態', logs.length],
+                  ['stages', '工序進度', null],
                   ['reports', '週期報告', weeklyReports.length],
                 ] as const
               ).map(([id, label, count]) => (
@@ -694,14 +695,16 @@ export default function AdminPage() {
                   key={id}
                   type="button"
                   onClick={() => setContentTab(id)}
-                  className={`flex-1 min-w-0 px-2 py-2 text-xs sm:text-sm font-semibold rounded-md transition ${
+                  className={`flex-1 min-w-[4.5rem] px-2 py-2 text-[11px] sm:text-sm font-semibold rounded-md transition ${
                     contentTab === id
                       ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
                       : 'text-stone-500 hover:text-stone-800'
                   }`}
                 >
                   {label}
-                  <span className="ml-1 tabular-nums text-[10px] font-medium text-stone-400">{count}</span>
+                  {count !== null && (
+                    <span className="ml-1 tabular-nums text-[10px] font-medium text-stone-400">{count}</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -978,7 +981,7 @@ export default function AdminPage() {
                             <span className="text-stone-500">[{r.category}]</span> {r.description || '無備註'}
                           </p>
                           <p className="text-[11px] text-stone-400 tabular-nums">
-                            {new Date(r.created_at).toLocaleString('zh-HK')}
+                            {new Date(r.created_at).toLocaleDateString('zh-HK')}
                           </p>
                         </div>
                       </div>
@@ -1107,21 +1110,21 @@ export default function AdminPage() {
               </div>
             </>
           )}
-        </section>
 
-        <section className={cardClass}>
-          <div className="px-5 sm:px-6 py-4 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50 flex justify-between items-center">
-            <div>
-              <h2 className="text-base font-semibold text-stone-900">各項工序完成度</h2>
-              <p className="text-xs text-stone-500 mt-1">
-                勾選後會自動同步至前台。「後加工程」仍會顯示，但唔計入整體進度％
-                {projectType === 'repair' ? '（此為維修單，前台暫唔顯示呢個區塊）' : ''}
-              </p>
-            </div>
-            {isSavingStages && (
-              <span className="text-[11px] font-medium text-teal-800 animate-pulse">儲存中…</span>
-            )}
-          </div>
+          {contentTab === 'stages' && (
+            <>
+              <div className="px-5 sm:px-6 py-4 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50 flex justify-between items-center">
+                <div>
+                  <h2 className="text-base font-semibold text-stone-900">各項工序完成度</h2>
+                  <p className="text-xs text-stone-500 mt-1">
+                    勾選後會自動同步至前台。「後加工程」仍會顯示，但唔計入整體進度％
+                    {projectType === 'repair' ? '（此為維修單，前台暫唔顯示呢個區塊）' : ''}
+                  </p>
+                </div>
+                {isSavingStages && (
+                  <span className="text-[11px] font-medium text-teal-800 animate-pulse">儲存中…</span>
+                )}
+              </div>
 
           <div className="px-5 sm:px-6 py-5 space-y-3">
             {INITIAL_STAGES.map((stage) => {
@@ -1214,6 +1217,8 @@ export default function AdminPage() {
               )
             })}
           </div>
+            </>
+          )}
         </section>
       </main>
     </div>
