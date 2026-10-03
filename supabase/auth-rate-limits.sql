@@ -10,4 +10,10 @@ CREATE TABLE IF NOT EXISTS public.auth_rate_limits (
 
 ALTER TABLE public.auth_rate_limits ENABLE ROW LEVEL SECURITY;
 
--- No policies for anon/authenticated => deny by default.
+-- Ensure API roles can use the table (service_role used by server)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.auth_rate_limits TO service_role;
+GRANT ALL ON TABLE public.auth_rate_limits TO postgres;
+
+-- Keep anon/authenticated locked out (RLS on + no policies)
+REVOKE ALL ON TABLE public.auth_rate_limits FROM anon;
+REVOKE ALL ON TABLE public.auth_rate_limits FROM authenticated;

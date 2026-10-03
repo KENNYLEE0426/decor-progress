@@ -6,6 +6,7 @@ import {
   calculateStageProgress,
   getVisibleItems,
   isCategoryEnabled,
+  isExtraCategory,
   isItemChecked,
   isRenovationProject,
   mergeStageState,
@@ -483,10 +484,19 @@ export default function DashboardPage() {
                     ).length
                     const isFullyCompleted = categoryCompletedCount === visibleItems.length
 
+                    const isExtra = isExtraCategory(stage.category, stagesState)
+
                     return (
                       <div key={stage.category} className="border border-stone-200 rounded-lg p-4 bg-stone-50/70">
-                        <div className="flex justify-between items-center mb-2.5">
-                          <span className="font-semibold text-stone-800 text-sm">{stage.category}</span>
+                        <div className="flex justify-between items-center mb-2.5 gap-2">
+                          <span className="font-semibold text-stone-800 text-sm flex items-center gap-1.5">
+                            {stage.category}
+                            {isExtra && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                後加
+                              </span>
+                            )}
+                          </span>
                           <span
                             className={`text-[11px] px-2 py-0.5 rounded font-medium ${
                               isFullyCompleted

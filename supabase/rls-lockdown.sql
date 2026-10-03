@@ -9,6 +9,7 @@ ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.progress_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_phases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.receipts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.weekly_reports ENABLE ROW LEVEL SECURITY;
 
 -- Drop overly-permissive policies if they exist (names may vary; safe to ignore errors)
 DO $$
@@ -19,7 +20,7 @@ BEGIN
     SELECT schemaname, tablename, policyname
     FROM pg_policies
     WHERE schemaname = 'public'
-      AND tablename IN ('projects', 'progress_logs', 'payment_phases', 'receipts')
+      AND tablename IN ('projects', 'progress_logs', 'payment_phases', 'receipts', 'weekly_reports')
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', r.policyname, r.schemaname, r.tablename);
   END LOOP;

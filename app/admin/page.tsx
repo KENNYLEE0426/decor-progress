@@ -356,6 +356,20 @@ export default function AdminPage() {
     await loadProjectData(selectedProjectId)
   }
 
+  const handleToggleExtraCategory = async (category: string) => {
+    const previous = stageState
+    const updated = {
+      ...stageState,
+      [category]: {
+        ...stageState[category],
+        is_extra: !stageState[category]?.is_extra,
+      },
+    }
+    setStageState(updated)
+    const ok = await saveStages(updated)
+    if (!ok) setStageState(previous)
+  }
+
   const handleToggleCategory = async (category: string) => {
     const previous = stageState
     const updated = {
@@ -903,7 +917,7 @@ export default function AdminPage() {
             <div>
               <h2 className="text-base font-semibold text-stone-900">各項工序完成度</h2>
               <p className="text-xs text-stone-500 mt-1">
-                勾選後會自動同步至前台
+                勾選後會自動同步至前台。「後加工程」仍會顯示，但唔計入整體進度％
                 {projectType === 'repair' ? '（此為維修單，前台暫唔顯示呢個區塊）' : ''}
               </p>
             </div>
@@ -921,16 +935,30 @@ export default function AdminPage() {
                 <div key={category} className="border border-stone-200 p-4 rounded-lg space-y-3 bg-stone-50/70">
                   <div className="flex justify-between items-center gap-3">
                     <h3 className="text-sm font-semibold text-stone-900">{category}</h3>
-                    <button
-                      onClick={() => handleToggleCategory(category)}
-                      className={`text-[11px] font-medium px-2.5 py-1 rounded transition ${
-                        isCategoryEnabled
-                          ? 'bg-teal-50 text-teal-800 border border-teal-200'
-                          : 'bg-stone-200 text-stone-600 border border-stone-300'
-                      }`}
-                    >
-                      {isCategoryEnabled ? '需要做' : '不需要'}
-                    </button>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleExtraCategory(category)}
+                        disabled={!isCategoryEnabled}
+                        className={`text-[11px] font-medium px-2.5 py-1 rounded transition ${
+                          stageState[category]?.is_extra
+                            ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                            : 'bg-white text-stone-500 border border-stone-300'
+                        } disabled:opacity-40`}
+                      >
+                        {stageState[category]?.is_extra ? '後加工程' : '正單工程'}
+                      </button>
+                      <button
+                        onClick={() => handleToggleCategory(category)}
+                        className={`text-[11px] font-medium px-2.5 py-1 rounded transition ${
+                          isCategoryEnabled
+                            ? 'bg-teal-50 text-teal-800 border border-teal-200'
+                            : 'bg-stone-200 text-stone-600 border border-stone-300'
+                        }`}
+                      >
+                        {isCategoryEnabled ? '需要做' : '不需要'}
+                      </button>
+                    </div>
                   </div>
 
                   {isCategoryEnabled && (

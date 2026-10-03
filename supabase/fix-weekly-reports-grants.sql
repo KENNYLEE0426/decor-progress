@@ -1,6 +1,7 @@
--- 週期工作進度報告（JPG）
--- 喺 Supabase SQL Editor 跑一次
+-- 修復 weekly_reports：permission denied for table
+-- 喺 Supabase Dashboard → SQL Editor 跑一次即可
 
+-- 確保表存在（如已建會跳過）
 CREATE TABLE IF NOT EXISTS public.weekly_reports (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
@@ -13,13 +14,13 @@ CREATE TABLE IF NOT EXISTS public.weekly_reports (
 CREATE INDEX IF NOT EXISTS weekly_reports_project_id_created_at_idx
   ON public.weekly_reports (project_id, created_at DESC);
 
--- 必須授權，否則 API（含 service_role）會 permission denied
+-- 關鍵：授權俾 API roles（唔係 RLS；缺呢步會出 permission denied）
 GRANT ALL ON TABLE public.weekly_reports TO anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 
+-- RLS：anon/authenticated 冇 policy = 唔可以直讀寫；service_role 可繞過
 ALTER TABLE public.weekly_reports ENABLE ROW LEVEL SECURITY;
 
--- 清走舊政策（如有），保持 anon 不可直讀寫；server service_role 可繞過 RLS
 DO $$
 DECLARE
   r RECORD;

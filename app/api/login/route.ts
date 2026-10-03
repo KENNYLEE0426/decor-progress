@@ -36,7 +36,15 @@ export async function POST(request: Request) {
       .eq('client_pin', String(pin).trim())
       .maybeSingle()
 
-    if (error || !project) {
+    if (error) {
+      console.error('Login supabase error:', error.message)
+      return NextResponse.json(
+        { error: '暫時無法連接資料庫，請稍後再試' },
+        { status: 503 }
+      )
+    }
+
+    if (!project) {
       const failPhone = await recordAuthFailure(phoneKey)
       const failIp = await recordAuthFailure(ipKey)
       const result = failPhone.locked ? failPhone : failIp

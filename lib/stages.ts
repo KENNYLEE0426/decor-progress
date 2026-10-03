@@ -26,6 +26,10 @@ export const INITIAL_STAGES: StageDef[] = [
     ],
   },
   {
+    category: '煤氣工程',
+    items: ['MARK位', '介坑', '藏喉', '安全測試', '完成'],
+  },
+  {
     category: '泥水工程',
     items: [
       '磚牆間隔',
@@ -74,6 +78,8 @@ export const ITEM_ALIASES: Record<string, Record<string, string>> = {
 export type StageState = {
   [category: string]: {
     enabled: boolean
+    /** true = 後加工程，前台仍顯示但唔計入整體進度 */
+    is_extra?: boolean
     items: { [item: string]: boolean }
     /** true = 唔俾客人睇（只對 allowHideItems 大項有意義） */
     hidden_items?: { [item: string]: boolean }
@@ -82,6 +88,10 @@ export type StageState = {
 
 export function isCategoryEnabled(category: string, state: StageState) {
   return state[category]?.enabled ?? true
+}
+
+export function isExtraCategory(category: string, state: StageState) {
+  return state[category]?.is_extra === true
 }
 
 export function isItemHidden(category: string, item: string, state: StageState) {
@@ -102,6 +112,7 @@ export function calculateStageProgress(state: StageState) {
   let total = 0
   let completed = 0
   INITIAL_STAGES.forEach((stage) => {
+    if (isExtraCategory(stage.category, state)) return
     getVisibleItems(stage, state).forEach((item) => {
       total++
       if (isItemChecked(stage.category, item, state)) completed++
@@ -133,6 +144,7 @@ export function defaultStageState(): StageState {
   INITIAL_STAGES.forEach((stage) => {
     state[stage.category] = {
       enabled: true,
+      is_extra: false,
       items: stage.items.reduce((acc, item) => ({ ...acc, [item]: false }), {}),
       hidden_items: stage.allowHideItems
         ? stage.items.reduce((acc, item) => ({ ...acc, [item]: false }), {})
@@ -155,6 +167,8 @@ export function mergeStageState(raw: any): StageState {
       normalized[to] = {
         ...normalized[from],
         ...normalized[to],
+        enabled: normalized[to]?.enabled ?? normalized[from]?.enabled,
+        is_extra: Boolean(normalized[to]?.is_extra || normalized[from]?.is_extra),
         items: {
           ...(normalized[from].items || {}),
           ...(normalized[to].items || {}),
@@ -173,6 +187,7 @@ export function mergeStageState(raw: any): StageState {
     const rawItems = applyItemAliases(targetCat, normalized[cat]?.items || {})
     merged[targetCat] = {
       enabled: normalized[cat]?.enabled ?? true,
+      is_extra: normalized[cat]?.is_extra === true,
       items: {
         ...merged[targetCat].items,
         ...rawItems,
