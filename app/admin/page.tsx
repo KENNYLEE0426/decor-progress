@@ -51,6 +51,30 @@ interface WeeklyReport {
 
 const CATEGORIES = INITIAL_STAGES.map((s) => s.category)
 
+function toHongKongDatetimeLocal(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Hong_Kong',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || ''
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`
+}
+
+function hongKongDatetimeLocalToIso(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/)
+  if (!match) return null
+  const [, year, month, day, hour, minute] = match
+  const utc = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour) - 8, Number(minute))
+  const isoDate = new Date(utc)
+  if (Number.isNaN(isoDate.getTime())) return null
+  return isoDate.toISOString()
+}
+
 const inputClass =
   'w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm text-stone-900 placeholder-stone-400 bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/30 focus:border-teal-700 transition'
 const labelClass = 'block text-[11px] font-medium uppercase tracking-[0.12em] text-stone-500 mb-1.5'
@@ -87,6 +111,7 @@ export default function AdminPage() {
 
   const [logs, setLogs] = useState<ProgressLog[]>([])
   const [logContent, setLogContent] = useState('')
+  const [logPublishedAt, setLogPublishedAt] = useState(toHongKongDatetimeLocal())
   const [logFiles, setLogFiles] = useState<File[]>([])
   const [logFilePreviews, setLogFilePreviews] = useState<string[]>([])
   const [isUploadingLog, setIsUploadingLog] = useState(false)
@@ -311,6 +336,7 @@ export default function AdminPage() {
           projectId: selectedProjectId,
           description: logContent,
           photo_urls: photoUrls,
+          createdAt: hongKongDatetimeLocalToIso(logPublishedAt) || undefined,
         }),
       })
       const { data } = await readJsonSafe(res)
@@ -318,6 +344,7 @@ export default function AdminPage() {
 
       setLogStatusMsg('施工動態新增成功')
       setLogContent('')
+      setLogPublishedAt(toHongKongDatetimeLocal())
       setLogFiles([])
       await loadProjectData(selectedProjectId)
     } catch (err: any) {
@@ -667,6 +694,18 @@ export default function AdminPage() {
                   className={inputClass}
                   required
                 />
+              </div>
+
+              <div>
+                <label className={labelClass}>發佈日期與時間</label>
+                <input
+                  type="datetime-local"
+                  value={logPublishedAt}
+                  onChange={(e) => setLogPublishedAt(e.target.value)}
+                  className={inputClass}
+                  required
+                />
+                <p className="text-[11px] text-stone-400 mt-1.5">預設而家時間，可改成現場當日日期／時間（香港時間）</p>
               </div>
 
               <div>

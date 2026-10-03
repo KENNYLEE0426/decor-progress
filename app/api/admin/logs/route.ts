@@ -10,6 +10,7 @@ export async function POST(request: Request) {
     let projectId = ''
     let description = ''
     let photoUrls: string[] = []
+    let createdAt: string | null = null
 
     if (contentType.includes('application/json')) {
       const body = await request.json()
@@ -20,12 +21,15 @@ export async function POST(request: Request) {
       } else if (typeof body.photoUrl === 'string' && body.photoUrl) {
         photoUrls = [body.photoUrl]
       }
+      if (body.createdAt) createdAt = String(body.createdAt)
     } else {
       const form = await request.formData()
       projectId = String(form.get('projectId') || '')
       description = String(form.get('description') || '')
       const photoUrl = String(form.get('photoUrl') || '')
       if (photoUrl) photoUrls = [photoUrl]
+      const createdAtField = String(form.get('createdAt') || '')
+      if (createdAtField) createdAt = createdAtField
     }
 
     if (!projectId || !description) {
@@ -34,12 +38,22 @@ export async function POST(request: Request) {
 
     photoUrls = photoUrls.filter(Boolean).slice(0, 5)
 
+    let createdAtIso: string | undefined
+    if (createdAt) {
+      const parsed = new Date(createdAt)
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: '發佈時間格式不正確' }, { status: 400 })
+      }
+      createdAtIso = parsed.toISOString()
+    }
+
     const supabase = createServiceClient()
     const { error } = await supabase.from('progress_logs').insert({
       project_id: projectId,
       title: '現場施工進度',
       description,
       photo_urls: photoUrls,
+      ...(createdAtIso ? { created_at: createdAtIso } : {}),
     })
 
     if (error) {
