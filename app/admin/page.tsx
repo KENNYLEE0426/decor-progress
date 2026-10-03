@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { INITIAL_STAGES, type StageState } from '@/lib/stages'
-import { readJsonSafe, uploadAdminPhoto } from '@/lib/admin-upload'
+import { readJsonSafe, uploadAdminFile, uploadAdminPhoto, isPdfUrl } from '@/lib/admin-upload'
 
 interface Project {
   id: string
@@ -496,7 +496,7 @@ export default function AdminPage() {
   const handleAddWeeklyReport = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedProjectId || !reportTitle.trim() || !reportFile) {
-      alert('請填寫報告標題並選擇 JPG 圖片')
+      alert('請填寫報告標題並選擇 PDF 檔')
       return
     }
 
@@ -504,7 +504,7 @@ export default function AdminPage() {
     setReportStatusMsg('上傳報告中…')
 
     try {
-      const imageUrl = await uploadAdminPhoto(reportFile, 'reports')
+      const imageUrl = await uploadAdminFile(reportFile, 'reports')
       const res = await fetch('/api/admin/weekly-reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1061,7 +1061,7 @@ export default function AdminPage() {
         <section className={cardClass}>
           <div className="px-5 sm:px-6 py-4 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50">
             <h2 className="text-base font-semibold text-stone-900">週期工作進度報告</h2>
-            <p className="text-xs text-stone-500 mt-1">上載每週 JPG 報告，前台最底可撳開睇</p>
+            <p className="text-xs text-stone-500 mt-1">上載每週 PDF 報告，前台最底可撳開睇</p>
           </div>
 
           <div className="px-5 sm:px-6 py-5 space-y-4">
@@ -1087,10 +1087,10 @@ export default function AdminPage() {
                 />
               </div>
               <div>
-                <label className={labelClass}>報告圖片（JPG）</label>
+                <label className={labelClass}>報告檔案（PDF）</label>
                 <input
                   type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  accept="application/pdf,.pdf"
                   onChange={(e) => setReportFile(e.target.files?.[0] || null)}
                   className={`${inputClass} file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:bg-stone-200 file:text-stone-700 file:text-xs`}
                   required
@@ -1130,11 +1130,22 @@ export default function AdminPage() {
                       className="flex items-center justify-between gap-3 bg-white p-3 rounded-lg border border-stone-200"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <img
-                          src={r.image_url}
-                          alt={r.title}
-                          className="w-14 h-14 object-cover rounded-md border border-stone-200 flex-shrink-0"
-                        />
+                        {isPdfUrl(r.image_url) ? (
+                          <a
+                            href={r.image_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-14 h-14 rounded-md border border-stone-200 bg-stone-100 flex items-center justify-center text-[11px] font-semibold text-stone-600 flex-shrink-0"
+                          >
+                            PDF
+                          </a>
+                        ) : (
+                          <img
+                            src={r.image_url}
+                            alt={r.title}
+                            className="w-14 h-14 object-cover rounded-md border border-stone-200 flex-shrink-0"
+                          />
+                        )}
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-stone-900 truncate">{r.title}</p>
                           <p className="text-[11px] text-stone-400 tabular-nums">

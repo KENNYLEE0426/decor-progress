@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const reportDate = body.reportDate ? String(body.reportDate) : null
 
     if (!projectId || !title || !imageUrl) {
-      return NextResponse.json({ error: '請填寫標題並上傳 JPG 報告' }, { status: 400 })
+      return NextResponse.json({ error: '請填寫標題並上傳 PDF 報告' }, { status: 400 })
     }
 
     const supabase = createServiceClient()

@@ -11,6 +11,7 @@ import {
   isRenovationProject,
   mergeStageState,
 } from '@/lib/stages'
+import { isPdfUrl } from '@/lib/admin-upload'
 
 interface ProgressLog {
   id: string
@@ -567,29 +568,60 @@ export default function DashboardPage() {
                 {weeklyReports.length === 0 ? (
                   <p className="text-xs text-stone-400 text-center py-6">暫未上載週期報告</p>
                 ) : (
-                  weeklyReports.map((r) => (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => setActiveImage(r.image_url)}
-                      className="w-full flex items-center gap-3 p-3 rounded-lg border border-stone-200 bg-stone-50/70 hover:bg-stone-50 hover:border-stone-300 transition text-left"
-                    >
-                      <img
-                        src={r.image_url}
-                        alt={r.title}
-                        className="w-16 h-16 object-cover rounded-md border border-stone-200 flex-shrink-0"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-stone-900 truncate">{r.title}</p>
-                        <p className="text-[11px] text-stone-400 mt-0.5 tabular-nums">
-                          {r.report_date
-                            ? new Date(r.report_date).toLocaleDateString('zh-HK')
-                            : formatDate(r.created_at)}
-                        </p>
-                        <p className="text-[11px] text-teal-800 mt-1 font-medium">撳此查看報告圖片</p>
-                      </div>
-                    </button>
-                  ))
+                  weeklyReports.map((r) => {
+                    const pdf = isPdfUrl(r.image_url)
+                    const inner = (
+                      <>
+                        {pdf ? (
+                          <div className="w-16 h-16 rounded-md border border-stone-200 bg-stone-100 flex items-center justify-center text-[11px] font-semibold text-stone-600 flex-shrink-0">
+                            PDF
+                          </div>
+                        ) : (
+                          <img
+                            src={r.image_url}
+                            alt={r.title}
+                            className="w-16 h-16 object-cover rounded-md border border-stone-200 flex-shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-stone-900 truncate">{r.title}</p>
+                          <p className="text-[11px] text-stone-400 mt-0.5 tabular-nums">
+                            {r.report_date
+                              ? new Date(r.report_date).toLocaleDateString('zh-HK')
+                              : formatDate(r.created_at)}
+                          </p>
+                          <p className="text-[11px] text-teal-800 mt-1 font-medium">
+                            {pdf ? '撳此開啟 PDF' : '撳此查看報告圖片'}
+                          </p>
+                        </div>
+                      </>
+                    )
+
+                    if (pdf) {
+                      return (
+                        <a
+                          key={r.id}
+                          href={r.image_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-full flex items-center gap-3 p-3 rounded-lg border border-stone-200 bg-stone-50/70 hover:bg-stone-50 hover:border-stone-300 transition text-left"
+                        >
+                          {inner}
+                        </a>
+                      )
+                    }
+
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => setActiveImage(r.image_url)}
+                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-stone-200 bg-stone-50/70 hover:bg-stone-50 hover:border-stone-300 transition text-left"
+                      >
+                        {inner}
+                      </button>
+                    )
+                  })
                 )}
               </div>
             )}

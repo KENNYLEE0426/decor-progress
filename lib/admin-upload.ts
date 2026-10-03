@@ -64,6 +64,53 @@ export async function uploadAdminPhoto(
   return meta.publicUrl as string
 }
 
+export async function uploadAdminFile(
+  file: File,
+  folder: 'logs' | 'receipts' | 'reports'
+): Promise<string> {
+  if (folder === 'reports') {
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+    if (!isPdf) throw new Error('請上載 PDF 檔')
+    if (file.size > 20 * 1024 * 1024) throw new Error('PDF 請細過 20MB')
+  }
+
+  const metaRes = await fetch('/api/admin/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      folder,
+      fileName: file.name,
+      contentType: file.type || (folder === 'reports' ? 'application/pdf' : 'image/jpeg'),
+    }),
+  })
+  const metaText = await metaRes.text()
+  let meta: any = {}
+  try {
+    meta = JSON.parse(metaText)
+  } catch {
+    throw new Error(metaText.slice(0, 120) || '取得上傳連結失敗')
+  }
+  if (!metaRes.ok) throw new Error(meta.error || '取得上傳連結失敗')
+
+  const putRes = await fetch(meta.signedUrl, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': meta.contentType || file.type || 'application/pdf',
+    },
+    body: file,
+  })
+  if (!putRes.ok) {
+    const t = await putRes.text().catch(() => '')
+    throw new Error(t.slice(0, 120) || '檔案上傳失敗')
+  }
+
+  return meta.publicUrl as string
+}
+
+export function isPdfUrl(url: string) {
+  return /\.pdf($|\?)/i.test(url)
+}
+
 export async function readJsonSafe(res: Response) {
   const text = await res.text()
   try {
