@@ -669,7 +669,7 @@ export default function DashboardPage() {
                               {doc.title}
                             </p>
                             <p className="text-[11px] text-stone-400 mt-0.5 tabular-nums">
-                              {formatDate(doc.created_at)}
+                              {new Date(doc.created_at).toLocaleDateString('zh-HK')}
                             </p>
                             <p className="text-[11px] text-teal-800 mt-1 font-medium">
                               {pdf ? '撳此開啟 PDF' : '撳此查看圖片'}

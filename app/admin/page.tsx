@@ -94,6 +94,15 @@ function hongKongDatetimeLocalToIso(value: string) {
   return isoDate.toISOString()
 }
 
+function toHongKongDateInput(date = new Date()) {
+  return toHongKongDatetimeLocal(date).slice(0, 10)
+}
+
+function hongKongDateToIso(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  return hongKongDatetimeLocalToIso(`${value}T00:00`)
+}
+
 const inputClass =
   'w-full border border-stone-300 rounded-lg px-3 py-2.5 text-sm text-stone-900 placeholder-stone-400 bg-white focus:outline-none focus:ring-2 focus:ring-teal-700/30 focus:border-teal-700 transition'
 const labelClass = 'block text-[11px] font-medium uppercase tracking-[0.12em] text-stone-500 mb-1.5'
@@ -165,7 +174,7 @@ export default function AdminPage() {
     PROJECT_DOCUMENT_CATEGORIES[0]
   )
   const [documentTitle, setDocumentTitle] = useState('')
-  const [documentPublishedAt, setDocumentPublishedAt] = useState(toHongKongDatetimeLocal())
+  const [documentPublishedDate, setDocumentPublishedDate] = useState(toHongKongDateInput())
   const [documentFile, setDocumentFile] = useState<File | null>(null)
   const [isUploadingDocument, setIsUploadingDocument] = useState(false)
   const [documentStatusMsg, setDocumentStatusMsg] = useState('')
@@ -603,7 +612,7 @@ export default function AdminPage() {
           category: documentCategory,
           title: documentTitle.trim() || documentCategory,
           fileUrl,
-          createdAt: hongKongDatetimeLocalToIso(documentPublishedAt) || undefined,
+          createdAt: hongKongDateToIso(documentPublishedDate) || undefined,
         }),
       })
       const { data } = await readJsonSafe(res)
@@ -612,7 +621,7 @@ export default function AdminPage() {
       setDocumentStatusMsg('文件新增成功')
       setDocumentTitle('')
       setDocumentFile(null)
-      setDocumentPublishedAt(toHongKongDatetimeLocal())
+      setDocumentPublishedDate(toHongKongDateInput())
       await loadProjectData(selectedProjectId)
     } catch (err: any) {
       setDocumentStatusMsg(`新增失敗：${err.message || '未知錯誤'}`)
@@ -1204,7 +1213,7 @@ export default function AdminPage() {
               <div className="px-5 sm:px-6 py-4 border-b border-stone-100">
                 <h2 className="text-base font-semibold text-stone-900">工程文件</h2>
                 <p className="text-xs text-stone-500 mt-1">
-                  分類上載 PDF 或相片；可改發佈日期時間
+                  分類上載 PDF 或相片；可改發佈日期
                 </p>
               </div>
 
@@ -1260,17 +1269,15 @@ export default function AdminPage() {
                     />
                   </div>
                   <div>
-                    <label className={labelClass}>發佈日期與時間</label>
+                    <label className={labelClass}>發佈日期</label>
                     <input
-                      type="datetime-local"
-                      value={documentPublishedAt}
-                      onChange={(e) => setDocumentPublishedAt(e.target.value)}
+                      type="date"
+                      value={documentPublishedDate}
+                      onChange={(e) => setDocumentPublishedDate(e.target.value)}
                       className={inputClass}
                       required
                     />
-                    <p className="text-[11px] text-stone-400 mt-1.5">
-                      預設而家時間，可改成文件當日（香港時間）
-                    </p>
+                    <p className="text-[11px] text-stone-400 mt-1.5">預設今日，可改成文件當日</p>
                   </div>
                   <div>
                     <label className={labelClass}>檔案（PDF 或相片）</label>
@@ -1353,7 +1360,7 @@ export default function AdminPage() {
                                     {doc.title}
                                   </p>
                                   <p className="text-[11px] text-stone-400 tabular-nums">
-                                    {new Date(doc.created_at).toLocaleString('zh-HK')}
+                                    {new Date(doc.created_at).toLocaleDateString('zh-HK')}
                                   </p>
                                 </div>
                               </div>
