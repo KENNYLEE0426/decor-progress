@@ -11,10 +11,16 @@ export async function POST(request: Request) {
     const contentType = String(body.contentType || 'image/jpeg')
     const originalName = String(body.fileName || 'photo.jpg')
     const fileExt = originalName.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '') || 'jpg'
-    const allowed = new Set(['logs', 'receipts', 'reports'])
+    const allowed = new Set(['logs', 'receipts', 'reports', 'documents'])
     const safeFolder = allowed.has(folder) ? folder : 'logs'
-    if (safeFolder === 'reports' && fileExt.toLowerCase() !== 'pdf') {
-      return NextResponse.json({ error: '週期報告請上載 PDF 檔' }, { status: 400 })
+    if (
+      (safeFolder === 'reports' || safeFolder === 'documents') &&
+      fileExt.toLowerCase() !== 'pdf'
+    ) {
+      return NextResponse.json(
+        { error: safeFolder === 'documents' ? '文件請上載 PDF 檔' : '週期報告請上載 PDF 檔' },
+        { status: 400 }
+      )
     }
     const filePath = `${safeFolder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`
 

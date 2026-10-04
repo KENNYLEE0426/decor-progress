@@ -55,17 +55,27 @@ interface WeeklyReport {
   created_at: string
 }
 
+interface ProjectDocument {
+  id: string
+  title: string
+  file_url: string
+  created_at: string
+}
+
 export default function DashboardPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [logs, setLogs] = useState<ProgressLog[]>([])
   const [loading, setLoading] = useState(true)
   const [activeImage, setActiveImage] = useState<string | null>(null)
-  const [contentTab, setContentTab] = useState<'receipts' | 'logs' | 'reports' | 'stages'>('receipts')
+  const [contentTab, setContentTab] = useState<
+    'receipts' | 'logs' | 'reports' | 'stages' | 'documents'
+  >('receipts')
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set())
   const [phases, setPhases] = useState<PaymentPhase[]>([])
   const [selectedPhaseId, setSelectedPhaseId] = useState<string>('')
   const [receipts, setReceipts] = useState<Receipt[]>([])
   const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>([])
+  const [documents, setDocuments] = useState<ProjectDocument[]>([])
   const [showWhatsApp, setShowWhatsApp] = useState(true)
 
   useEffect(() => {
@@ -108,6 +118,7 @@ export default function DashboardPage() {
     setSelectedPhaseId(data.selectedPhaseId || '')
     setReceipts(data.receipts || [])
     setWeeklyReports(data.weeklyReports || [])
+    setDocuments(data.documents || [])
     setExpandedLogIds((prev) => {
       if (prev.size > 0) {
         const valid = new Set([...prev].filter((id) => nextLogs.some((l) => l.id === id)))
@@ -243,6 +254,7 @@ export default function DashboardPage() {
                     ? ([['stages', '工序進度', currentProgress]] as const)
                     : []),
                   ['reports', '週期報告', weeklyReports.length],
+                  ['documents', '文件', documents.length],
                 ] as const
               ).map(([id, label, count]) => (
                 <button
@@ -584,6 +596,35 @@ export default function DashboardPage() {
                   </div>
                 )
               })}
+            </div>
+          )}
+
+          {contentTab === 'documents' && (
+            <div className="px-5 sm:px-6 py-5 space-y-2">
+              {documents.length === 0 ? (
+                <p className="text-xs text-stone-400 text-center py-6">暫未上載文件</p>
+              ) : (
+                documents.map((doc) => (
+                  <a
+                    key={doc.id}
+                    href={doc.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-stone-200 bg-stone-50/70 hover:bg-stone-50 hover:border-stone-300 transition text-left"
+                  >
+                    <div className="w-16 h-16 rounded-md border border-stone-200 bg-stone-100 flex items-center justify-center text-[11px] font-semibold text-stone-600 flex-shrink-0">
+                      PDF
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-stone-900 truncate">{doc.title}</p>
+                      <p className="text-[11px] text-stone-400 mt-0.5 tabular-nums">
+                        {formatDate(doc.created_at)}
+                      </p>
+                      <p className="text-[11px] text-teal-800 mt-1 font-medium">撳此開啟 PDF</p>
+                    </div>
+                  </a>
+                ))
+              )}
             </div>
           )}
         </section>

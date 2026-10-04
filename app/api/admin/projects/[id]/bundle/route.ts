@@ -79,7 +79,7 @@ export async function GET(
       currentPhase = newPhase
     }
 
-    const [{ data: logs }, { data: receipts }, reportsResult] = await Promise.all([
+    const [{ data: logs }, { data: receipts }, reportsResult, documentsResult] = await Promise.all([
       supabase
         .from('progress_logs')
         .select('id, project_id, title, description, photo_urls, created_at')
@@ -97,12 +97,23 @@ export async function GET(
         .select('id, project_id, title, report_date, image_url, created_at')
         .eq('project_id', projectId)
         .order('created_at', { ascending: false }),
+      supabase
+        .from('project_documents')
+        .select('id, project_id, title, file_url, created_at')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false }),
     ])
 
     const weeklyReports =
       reportsResult.error && String(reportsResult.error.message || '').includes('weekly_reports')
         ? []
         : reportsResult.data || []
+
+    const documents =
+      documentsResult.error &&
+      String(documentsResult.error.message || '').includes('project_documents')
+        ? []
+        : documentsResult.data || []
 
     return NextResponse.json({
       project: {
@@ -117,6 +128,7 @@ export async function GET(
       receipts: receipts || [],
       logs: logs || [],
       weeklyReports,
+      documents,
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message || '伺服器錯誤' }, { status: 500 })

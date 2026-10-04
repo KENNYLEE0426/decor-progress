@@ -49,6 +49,14 @@ interface WeeklyReport {
   created_at: string
 }
 
+interface ProjectDocument {
+  id: string
+  project_id?: string
+  title: string
+  file_url: string
+  created_at: string
+}
+
 const CATEGORIES = INITIAL_STAGES.map((s) => s.category)
 
 function toHongKongDatetimeLocal(date = new Date()) {
@@ -109,7 +117,9 @@ export default function AdminPage() {
   const [receiptPublishedAt, setReceiptPublishedAt] = useState(toHongKongDatetimeLocal())
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false)
   const [receiptStatusMsg, setReceiptStatusMsg] = useState('')
-  const [contentTab, setContentTab] = useState<'receipts' | 'logs' | 'reports' | 'stages'>('receipts')
+  const [contentTab, setContentTab] = useState<
+    'receipts' | 'logs' | 'reports' | 'stages' | 'documents'
+  >('receipts')
 
   const [logs, setLogs] = useState<ProgressLog[]>([])
   const [logContent, setLogContent] = useState('')
@@ -138,6 +148,13 @@ export default function AdminPage() {
   const [reportFile, setReportFile] = useState<File | null>(null)
   const [isUploadingReport, setIsUploadingReport] = useState(false)
   const [reportStatusMsg, setReportStatusMsg] = useState('')
+
+  const [documents, setDocuments] = useState<ProjectDocument[]>([])
+  const [documentTitle, setDocumentTitle] = useState('')
+  const [documentPublishedAt, setDocumentPublishedAt] = useState(toHongKongDatetimeLocal())
+  const [documentFile, setDocumentFile] = useState<File | null>(null)
+  const [isUploadingDocument, setIsUploadingDocument] = useState(false)
+  const [documentStatusMsg, setDocumentStatusMsg] = useState('')
 
   useEffect(() => {
     const check = async () => {
@@ -176,9 +193,11 @@ export default function AdminPage() {
     setReceipts([])
     setLogs([])
     setWeeklyReports([])
+    setDocuments([])
     setReceiptStatusMsg('')
     setLogStatusMsg('')
     setReportStatusMsg('')
+    setDocumentStatusMsg('')
 
     const res = await fetch(`/api/admin/projects/${projectId}/bundle`)
     if (!res.ok) {
@@ -190,6 +209,7 @@ export default function AdminPage() {
     setReceipts(data.receipts || [])
     setLogs(data.logs || [])
     setWeeklyReports(data.weeklyReports || [])
+    setDocuments(data.documents || [])
     setStageState(data.stages_state || {})
     setProjectType(data.project?.project_type === 'repair' ? 'repair' : 'renovation')
   }
@@ -549,6 +569,58 @@ export default function AdminPage() {
     await loadProjectData(selectedProjectId)
   }
 
+  const handleAddDocument = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedProjectId || !documentTitle.trim() || !documentFile) {
+      alert('請填寫文件標題並選擇 PDF 檔')
+      return
+    }
+
+    setIsUploadingDocument(true)
+    setDocumentStatusMsg('上傳文件中…')
+
+    try {
+      const fileUrl = await uploadAdminFile(documentFile, 'documents')
+      const res = await fetch('/api/admin/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: selectedProjectId,
+          title: documentTitle.trim(),
+          fileUrl,
+          createdAt: hongKongDatetimeLocalToIso(documentPublishedAt) || undefined,
+        }),
+      })
+      const { data } = await readJsonSafe(res)
+      if (!res.ok) throw new Error(data.error || '新增失敗')
+
+      setDocumentStatusMsg('文件新增成功')
+      setDocumentTitle('')
+      setDocumentFile(null)
+      setDocumentPublishedAt(toHongKongDatetimeLocal())
+      await loadProjectData(selectedProjectId)
+    } catch (err: any) {
+      setDocumentStatusMsg(`新增失敗：${err.message || '未知錯誤'}`)
+    } finally {
+      setIsUploadingDocument(false)
+    }
+  }
+
+  const handleDeleteDocument = async (id: string) => {
+    if (!confirm('確定刪除這份文件？')) return
+    const res = await fetch('/api/admin/documents', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    if (!res.ok) {
+      const { data } = await readJsonSafe(res)
+      alert(data.error || '刪除失敗')
+      return
+    }
+    await loadProjectData(selectedProjectId)
+  }
+
   if (authChecking) {
     return (
       <div className="min-h-screen bg-[#f3f1ee] flex items-center justify-center">
@@ -689,6 +761,7 @@ export default function AdminPage() {
                   ['logs', '施工動態', logs.length],
                   ['stages', '工序進度', null],
                   ['reports', '週期報告', weeklyReports.length],
+                  ['documents', '文件', documents.length],
                 ] as const
               ).map(([id, label, count]) => (
                 <button
@@ -1100,6 +1173,113 @@ export default function AdminPage() {
                             </div>
                           </div>
                           <button onClick={() => handleDeleteWeeklyReport(r.id)} className={dangerBtnClass}>
+                            刪除
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          {contentTab === 'documents' && (
+            <>
+              <div className="px-5 sm:px-6 py-4 border-b border-stone-100">
+                <h2 className="text-base font-semibold text-stone-900">文件區</h2>
+                <p className="text-xs text-stone-500 mt-1">上載 PDF，前台可撳開睇；可改發佈日期時間</p>
+              </div>
+
+              <div className="px-5 sm:px-6 py-5 space-y-4">
+                <form
+                  onSubmit={handleAddDocument}
+                  className="space-y-4 bg-stone-50 p-4 rounded-lg border border-stone-200"
+                >
+                  <div>
+                    <label className={labelClass}>文件標題</label>
+                    <input
+                      type="text"
+                      placeholder="例：報價單、合約、物料清單"
+                      value={documentTitle}
+                      onChange={(e) => setDocumentTitle(e.target.value)}
+                      className={inputClass}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>發佈日期與時間</label>
+                    <input
+                      type="datetime-local"
+                      value={documentPublishedAt}
+                      onChange={(e) => setDocumentPublishedAt(e.target.value)}
+                      className={inputClass}
+                      required
+                    />
+                    <p className="text-[11px] text-stone-400 mt-1.5">
+                      預設而家時間，可改成文件當日（香港時間）
+                    </p>
+                  </div>
+                  <div>
+                    <label className={labelClass}>文件檔案（PDF）</label>
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      onChange={(e) => setDocumentFile(e.target.files?.[0] || null)}
+                      className={`${inputClass} file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:bg-stone-200 file:text-stone-700 file:text-xs`}
+                      required
+                    />
+                    {documentFile && (
+                      <p className="text-[11px] text-stone-500 mt-1.5">已選：{documentFile.name}</p>
+                    )}
+                  </div>
+                  <button type="submit" disabled={isUploadingDocument} className={primaryBtnClass}>
+                    {isUploadingDocument ? '上載中…' : '新增文件'}
+                  </button>
+                  {documentStatusMsg && (
+                    <p
+                      className={`text-xs text-center font-medium ${
+                        documentStatusMsg.includes('失敗') ? 'text-red-700' : 'text-teal-800'
+                      }`}
+                    >
+                      {documentStatusMsg}
+                    </p>
+                  )}
+                </form>
+
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-stone-900">
+                    已上載文件
+                    <span className="ml-2 text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
+                      {documents.length} 份
+                    </span>
+                  </h3>
+                  {documents.length === 0 ? (
+                    <p className="text-xs text-stone-400 py-2">暫無文件</p>
+                  ) : (
+                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                      {documents.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="flex items-center justify-between gap-3 bg-white p-3 rounded-lg border border-stone-200"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <a
+                              href={doc.file_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="w-14 h-14 rounded-md border border-stone-200 bg-stone-100 flex items-center justify-center text-[11px] font-semibold text-stone-600 flex-shrink-0"
+                            >
+                              PDF
+                            </a>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-stone-900 truncate">{doc.title}</p>
+                              <p className="text-[11px] text-stone-400 tabular-nums">
+                                {new Date(doc.created_at).toLocaleString('zh-HK')}
+                              </p>
+                            </div>
+                          </div>
+                          <button onClick={() => handleDeleteDocument(doc.id)} className={dangerBtnClass}>
                             刪除
                           </button>
                         </div>

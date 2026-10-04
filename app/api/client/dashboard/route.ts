@@ -43,7 +43,7 @@ export async function GET() {
       return NextResponse.json({ error: '找不到工程資料' }, { status: 404 })
     }
 
-    const [{ data: logs }, { data: phases }, reportsResult] = await Promise.all([
+    const [{ data: logs }, { data: phases }, reportsResult, documentsResult] = await Promise.all([
       supabase
         .from('progress_logs')
         .select('id, title, description, photo_urls, created_at')
@@ -57,6 +57,11 @@ export async function GET() {
       supabase
         .from('weekly_reports')
         .select('id, title, report_date, image_url, created_at')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('project_documents')
+        .select('id, title, file_url, created_at')
         .eq('project_id', projectId)
         .order('created_at', { ascending: false }),
     ])
@@ -83,6 +88,12 @@ export async function GET() {
         ? []
         : reportsResult.data || []
 
+    const documents =
+      documentsResult.error &&
+      String(documentsResult.error.message || '').includes('project_documents')
+        ? []
+        : documentsResult.data || []
+
     return NextResponse.json({
       project,
       logs: logs || [],
@@ -90,6 +101,7 @@ export async function GET() {
       selectedPhaseId,
       receipts,
       weeklyReports,
+      documents,
       stages: INITIAL_STAGES,
     })
   } catch (err: any) {

@@ -24,9 +24,11 @@ export async function compressImage(file: File, maxEdge = 1600, quality = 0.8): 
   return new File([blob], name, { type: 'image/jpeg' })
 }
 
+type UploadFolder = 'logs' | 'receipts' | 'reports' | 'documents'
+
 export async function uploadAdminPhoto(
   file: File,
-  folder: 'logs' | 'receipts' | 'reports'
+  folder: UploadFolder
 ): Promise<string> {
   // 週報需要睇得清文字，用較大尺寸
   const compressed =
@@ -66,9 +68,9 @@ export async function uploadAdminPhoto(
 
 export async function uploadAdminFile(
   file: File,
-  folder: 'logs' | 'receipts' | 'reports'
+  folder: UploadFolder
 ): Promise<string> {
-  if (folder === 'reports') {
+  if (folder === 'reports' || folder === 'documents') {
     const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
     if (!isPdf) throw new Error('請上載 PDF 檔')
     if (file.size > 20 * 1024 * 1024) throw new Error('PDF 請細過 20MB')
@@ -80,7 +82,9 @@ export async function uploadAdminFile(
     body: JSON.stringify({
       folder,
       fileName: file.name,
-      contentType: file.type || (folder === 'reports' ? 'application/pdf' : 'image/jpeg'),
+      contentType:
+        file.type ||
+        (folder === 'reports' || folder === 'documents' ? 'application/pdf' : 'image/jpeg'),
     }),
   })
   const metaText = await metaRes.text()
