@@ -13,14 +13,15 @@ export async function POST(request: Request) {
     const fileExt = originalName.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '') || 'jpg'
     const allowed = new Set(['logs', 'receipts', 'reports', 'documents'])
     const safeFolder = allowed.has(folder) ? folder : 'logs'
-    if (
-      (safeFolder === 'reports' || safeFolder === 'documents') &&
-      fileExt.toLowerCase() !== 'pdf'
-    ) {
-      return NextResponse.json(
-        { error: safeFolder === 'documents' ? '文件請上載 PDF 檔' : '週期報告請上載 PDF 檔' },
-        { status: 400 }
-      )
+    const ext = fileExt.toLowerCase()
+    if (safeFolder === 'reports' && ext !== 'pdf') {
+      return NextResponse.json({ error: '週期報告請上載 PDF 檔' }, { status: 400 })
+    }
+    if (safeFolder === 'documents') {
+      const okDoc = ext === 'pdf' || ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext)
+      if (!okDoc) {
+        return NextResponse.json({ error: '工程文件請上載 PDF 或相片' }, { status: 400 })
+      }
     }
     const filePath = `${safeFolder}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`
 

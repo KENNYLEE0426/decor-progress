@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from 'react'
 import { INITIAL_STAGES, type StageState } from '@/lib/stages'
-import { readJsonSafe, uploadAdminFile, uploadAdminPhoto, isPdfUrl } from '@/lib/admin-upload'
+import {
+  readJsonSafe,
+  uploadAdminFile,
+  uploadAdminPhoto,
+  uploadAdminDocument,
+  isPdfUrl,
+} from '@/lib/admin-upload'
+import {
+  PROJECT_DOCUMENT_CATEGORIES,
+  type ProjectDocumentCategory,
+} from '@/lib/project-documents'
 
 interface Project {
   id: string
@@ -52,6 +62,7 @@ interface WeeklyReport {
 interface ProjectDocument {
   id: string
   project_id?: string
+  category?: string
   title: string
   file_url: string
   created_at: string
@@ -150,6 +161,9 @@ export default function AdminPage() {
   const [reportStatusMsg, setReportStatusMsg] = useState('')
 
   const [documents, setDocuments] = useState<ProjectDocument[]>([])
+  const [documentCategory, setDocumentCategory] = useState<ProjectDocumentCategory>(
+    PROJECT_DOCUMENT_CATEGORIES[0]
+  )
   const [documentTitle, setDocumentTitle] = useState('')
   const [documentPublishedAt, setDocumentPublishedAt] = useState(toHongKongDatetimeLocal())
   const [documentFile, setDocumentFile] = useState<File | null>(null)
@@ -571,8 +585,8 @@ export default function AdminPage() {
 
   const handleAddDocument = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedProjectId || !documentTitle.trim() || !documentFile) {
-      alert('請填寫文件標題並選擇 PDF 檔')
+    if (!selectedProjectId || !documentFile) {
+      alert('請選擇 PDF 或相片')
       return
     }
 
@@ -580,13 +594,14 @@ export default function AdminPage() {
     setDocumentStatusMsg('上傳文件中…')
 
     try {
-      const fileUrl = await uploadAdminFile(documentFile, 'documents')
+      const fileUrl = await uploadAdminDocument(documentFile)
       const res = await fetch('/api/admin/documents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId: selectedProjectId,
-          title: documentTitle.trim(),
+          category: documentCategory,
+          title: documentTitle.trim() || documentCategory,
           fileUrl,
           createdAt: hongKongDatetimeLocalToIso(documentPublishedAt) || undefined,
         }),
@@ -761,7 +776,7 @@ export default function AdminPage() {
                   ['logs', '施工動態', logs.length],
                   ['stages', '工序進度', null],
                   ['reports', '週期報告', weeklyReports.length],
-                  ['documents', '文件', documents.length],
+                  ['documents', '工程文件', documents.length],
                 ] as const
               ).map(([id, label, count]) => (
                 <button
@@ -1187,8 +1202,45 @@ export default function AdminPage() {
           {contentTab === 'documents' && (
             <>
               <div className="px-5 sm:px-6 py-4 border-b border-stone-100">
-                <h2 className="text-base font-semibold text-stone-900">文件區</h2>
-                <p className="text-xs text-stone-500 mt-1">上載 PDF，前台可撳開睇；可改發佈日期時間</p>
+                <h2 className="text-base font-semibold text-stone-900">工程文件</h2>
+                <p className="text-xs text-stone-500 mt-1">
+                  分類上載 PDF 或相片；可改發佈日期時間
+                </p>
+              </div>
+
+              <div className="px-3 sm:px-4 pt-3">
+                <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-0.5 px-0.5">
+                  {PROJECT_DOCUMENT_CATEGORIES.map((cat) => {
+                    const count = documents.filter((d) => (d.category || '報價單') === cat).length
+                    const active = documentCategory === cat
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => {
+                          setDocumentCategory(cat)
+                          setDocumentStatusMsg('')
+                        }}
+                        className={`flex-shrink-0 px-2.5 py-1.5 rounded-md text-[11px] sm:text-xs font-semibold transition whitespace-nowrap ${
+                          active
+                            ? 'bg-stone-900 text-stone-50'
+                            : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                        }`}
+                      >
+                        {cat}
+                        {count > 0 && (
+                          <span
+                            className={`ml-1 tabular-nums ${
+                              active ? 'text-stone-300' : 'text-stone-400'
+                            }`}
+                          >
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
               <div className="px-5 sm:px-6 py-5 space-y-4">
@@ -1196,15 +1248,15 @@ export default function AdminPage() {
                   onSubmit={handleAddDocument}
                   className="space-y-4 bg-stone-50 p-4 rounded-lg border border-stone-200"
                 >
+                  <p className="text-sm font-semibold text-stone-900">新增：{documentCategory}</p>
                   <div>
-                    <label className={labelClass}>文件標題</label>
+                    <label className={labelClass}>備註／標題（可選）</label>
                     <input
                       type="text"
-                      placeholder="例：報價單、合約、物料清單"
+                      placeholder={`例：${documentCategory}（留空則用分類名）`}
                       value={documentTitle}
                       onChange={(e) => setDocumentTitle(e.target.value)}
                       className={inputClass}
-                      required
                     />
                   </div>
                   <div>
@@ -1221,10 +1273,10 @@ export default function AdminPage() {
                     </p>
                   </div>
                   <div>
-                    <label className={labelClass}>文件檔案（PDF）</label>
+                    <label className={labelClass}>檔案（PDF 或相片）</label>
                     <input
                       type="file"
-                      accept="application/pdf,.pdf"
+                      accept="application/pdf,.pdf,image/*"
                       onChange={(e) => setDocumentFile(e.target.files?.[0] || null)}
                       className={`${inputClass} file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:bg-stone-200 file:text-stone-700 file:text-xs`}
                       required
@@ -1234,7 +1286,7 @@ export default function AdminPage() {
                     )}
                   </div>
                   <button type="submit" disabled={isUploadingDocument} className={primaryBtnClass}>
-                    {isUploadingDocument ? '上載中…' : '新增文件'}
+                    {isUploadingDocument ? '上載中…' : `新增${documentCategory}`}
                   </button>
                   {documentStatusMsg && (
                     <p
@@ -1249,41 +1301,71 @@ export default function AdminPage() {
 
                 <div className="space-y-2">
                   <h3 className="text-sm font-semibold text-stone-900">
-                    已上載文件
+                    {documentCategory}
                     <span className="ml-2 text-[11px] font-medium text-stone-500 bg-stone-100 px-2 py-0.5 rounded tabular-nums">
-                      {documents.length} 份
+                      {
+                        documents.filter((d) => (d.category || '報價單') === documentCategory)
+                          .length
+                      }{' '}
+                      份
                     </span>
                   </h3>
-                  {documents.length === 0 ? (
-                    <p className="text-xs text-stone-400 py-2">暫無文件</p>
+                  {documents.filter((d) => (d.category || '報價單') === documentCategory).length ===
+                  0 ? (
+                    <p className="text-xs text-stone-400 py-2">此分類暫無文件</p>
                   ) : (
                     <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                      {documents.map((doc) => (
-                        <div
-                          key={doc.id}
-                          className="flex items-center justify-between gap-3 bg-white p-3 rounded-lg border border-stone-200"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <a
-                              href={doc.file_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="w-14 h-14 rounded-md border border-stone-200 bg-stone-100 flex items-center justify-center text-[11px] font-semibold text-stone-600 flex-shrink-0"
+                      {documents
+                        .filter((d) => (d.category || '報價單') === documentCategory)
+                        .map((doc) => {
+                          const pdf = isPdfUrl(doc.file_url)
+                          return (
+                            <div
+                              key={doc.id}
+                              className="flex items-center justify-between gap-3 bg-white p-3 rounded-lg border border-stone-200"
                             >
-                              PDF
-                            </a>
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-stone-900 truncate">{doc.title}</p>
-                              <p className="text-[11px] text-stone-400 tabular-nums">
-                                {new Date(doc.created_at).toLocaleString('zh-HK')}
-                              </p>
+                              <div className="flex items-center gap-3 min-w-0">
+                                {pdf ? (
+                                  <a
+                                    href={doc.file_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="w-14 h-14 rounded-md border border-stone-200 bg-stone-100 flex items-center justify-center text-[11px] font-semibold text-stone-600 flex-shrink-0"
+                                  >
+                                    PDF
+                                  </a>
+                                ) : (
+                                  <a
+                                    href={doc.file_url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex-shrink-0"
+                                  >
+                                    <img
+                                      src={doc.file_url}
+                                      alt={doc.title}
+                                      className="w-14 h-14 object-cover rounded-md border border-stone-200"
+                                    />
+                                  </a>
+                                )}
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-stone-900 truncate">
+                                    {doc.title}
+                                  </p>
+                                  <p className="text-[11px] text-stone-400 tabular-nums">
+                                    {new Date(doc.created_at).toLocaleString('zh-HK')}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleDeleteDocument(doc.id)}
+                                className={dangerBtnClass}
+                              >
+                                刪除
+                              </button>
                             </div>
-                          </div>
-                          <button onClick={() => handleDeleteDocument(doc.id)} className={dangerBtnClass}>
-                            刪除
-                          </button>
-                        </div>
-                      ))}
+                          )
+                        })}
                     </div>
                   )}
                 </div>

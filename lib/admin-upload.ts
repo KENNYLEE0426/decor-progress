@@ -70,7 +70,7 @@ export async function uploadAdminFile(
   file: File,
   folder: UploadFolder
 ): Promise<string> {
-  if (folder === 'reports' || folder === 'documents') {
+  if (folder === 'reports') {
     const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
     if (!isPdf) throw new Error('請上載 PDF 檔')
     if (file.size > 20 * 1024 * 1024) throw new Error('PDF 請細過 20MB')
@@ -82,9 +82,7 @@ export async function uploadAdminFile(
     body: JSON.stringify({
       folder,
       fileName: file.name,
-      contentType:
-        file.type ||
-        (folder === 'reports' || folder === 'documents' ? 'application/pdf' : 'image/jpeg'),
+      contentType: file.type || (folder === 'reports' ? 'application/pdf' : 'image/jpeg'),
     }),
   })
   const metaText = await metaRes.text()
@@ -109,6 +107,20 @@ export async function uploadAdminFile(
   }
 
   return meta.publicUrl as string
+}
+
+/** 工程文件：PDF 或相片 */
+export async function uploadAdminDocument(file: File): Promise<string> {
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+  const isImage = file.type.startsWith('image/') || /\.(jpe?g|png|webp|gif)$/i.test(file.name)
+  if (!isPdf && !isImage) throw new Error('請上載 PDF 或相片')
+  if (isPdf) {
+    if (file.size > 20 * 1024 * 1024) throw new Error('PDF 請細過 20MB')
+    return uploadAdminFile(file, 'documents')
+  }
+  // 圖紙文字要清楚啲，用較大尺寸
+  const compressed = await compressImage(file, 2800, 0.88)
+  return uploadAdminFile(compressed, 'documents')
 }
 
 export function isPdfUrl(url: string) {

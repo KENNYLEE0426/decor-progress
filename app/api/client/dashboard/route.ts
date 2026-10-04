@@ -61,7 +61,7 @@ export async function GET() {
         .order('created_at', { ascending: false }),
       supabase
         .from('project_documents')
-        .select('id, title, file_url, created_at')
+        .select('id, category, title, file_url, created_at')
         .eq('project_id', projectId)
         .order('created_at', { ascending: false }),
     ])
@@ -90,7 +90,8 @@ export async function GET() {
 
     const documents =
       documentsResult.error &&
-      String(documentsResult.error.message || '').includes('project_documents')
+      (String(documentsResult.error.message || '').includes('project_documents') ||
+        String(documentsResult.error.message || '').includes('category'))
         ? []
         : documentsResult.data || []
 

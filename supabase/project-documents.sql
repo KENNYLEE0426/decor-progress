@@ -1,9 +1,10 @@
--- 工程文件區：PDF 上載，前後台經 Next.js API 存取
--- 喺 Supabase Dashboard → SQL Editor 跑一次
+-- 工程文件區：PDF／相片上載，前後台經 Next.js API 存取
+-- 喺 Supabase Dashboard → SQL Editor 跑一次（新庫用）
 
 CREATE TABLE IF NOT EXISTS public.project_documents (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  category text NOT NULL DEFAULT '報價單',
   title text NOT NULL,
   file_url text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
@@ -11,6 +12,9 @@ CREATE TABLE IF NOT EXISTS public.project_documents (
 
 CREATE INDEX IF NOT EXISTS project_documents_project_id_created_at_idx
   ON public.project_documents (project_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS project_documents_project_id_category_created_at_idx
+  ON public.project_documents (project_id, category, created_at DESC);
 
 GRANT ALL ON TABLE public.project_documents TO anon, authenticated, service_role;
 
@@ -29,4 +33,4 @@ BEGIN
   END LOOP;
 END $$;
 
-COMMENT ON TABLE public.project_documents IS '工程文件 PDF，前後台經 Next.js API 存取';
+COMMENT ON TABLE public.project_documents IS '工程文件 PDF／相片，前後台經 Next.js API 存取';

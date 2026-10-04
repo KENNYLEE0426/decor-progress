@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdminSession, unauthorized } from '@/lib/auth'
 import { createServiceClient } from '@/lib/supabase-server'
+import { isProjectDocumentCategory } from '@/lib/project-documents'
 
 export async function POST(request: Request) {
   if (!(await requireAdminSession())) return unauthorized()
@@ -8,12 +9,16 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     const projectId = String(body.projectId || '')
+    const category = String(body.category || '').trim()
     const title = String(body.title || '').trim()
     const fileUrl = String(body.fileUrl || '').trim()
     const createdAt = body.createdAt ? String(body.createdAt) : null
 
-    if (!projectId || !title || !fileUrl) {
-      return NextResponse.json({ error: '請填寫標題並上傳 PDF' }, { status: 400 })
+    if (!projectId || !fileUrl) {
+      return NextResponse.json({ error: '請上傳 PDF 或相片' }, { status: 400 })
+    }
+    if (!isProjectDocumentCategory(category)) {
+      return NextResponse.json({ error: '文件分類不正確' }, { status: 400 })
     }
 
     let createdAtIso: string | undefined
@@ -28,7 +33,8 @@ export async function POST(request: Request) {
     const supabase = createServiceClient()
     const { error } = await supabase.from('project_documents').insert({
       project_id: projectId,
-      title,
+      category,
+      title: title || category,
       file_url: fileUrl,
       ...(createdAtIso ? { created_at: createdAtIso } : {}),
     })
