@@ -49,6 +49,33 @@ export async function POST(request: Request) {
   }
 }
 
+export async function PATCH(request: Request) {
+  if (!(await requireAdminSession())) return unauthorized()
+
+  try {
+    const body = await request.json()
+    const id = String(body.id || '')
+    const title = String(body.title || '').trim()
+
+    if (!id) return NextResponse.json({ error: '缺少 id' }, { status: 400 })
+    if (!title) return NextResponse.json({ error: '請輸入標題' }, { status: 400 })
+
+    const supabase = createServiceClient()
+    const { error } = await supabase
+      .from('project_documents')
+      .update({ title })
+      .eq('id', id)
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || '伺服器錯誤' }, { status: 500 })
+  }
+}
+
 export async function DELETE(request: Request) {
   if (!(await requireAdminSession())) return unauthorized()
 

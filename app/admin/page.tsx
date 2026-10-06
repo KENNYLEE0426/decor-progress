@@ -178,6 +178,9 @@ export default function AdminPage() {
   const [documentFile, setDocumentFile] = useState<File | null>(null)
   const [isUploadingDocument, setIsUploadingDocument] = useState(false)
   const [documentStatusMsg, setDocumentStatusMsg] = useState('')
+  const [editingDocumentId, setEditingDocumentId] = useState<string | null>(null)
+  const [editingDocumentTitle, setEditingDocumentTitle] = useState('')
+  const [isSavingDocumentTitle, setIsSavingDocumentTitle] = useState(false)
 
   useEffect(() => {
     const check = async () => {
@@ -221,6 +224,8 @@ export default function AdminPage() {
     setLogStatusMsg('')
     setReportStatusMsg('')
     setDocumentStatusMsg('')
+    setEditingDocumentId(null)
+    setEditingDocumentTitle('')
 
     const res = await fetch(`/api/admin/projects/${projectId}/bundle`)
     if (!res.ok) {
@@ -642,7 +647,49 @@ export default function AdminPage() {
       alert(data.error || '刪除失敗')
       return
     }
+    if (editingDocumentId === id) {
+      setEditingDocumentId(null)
+      setEditingDocumentTitle('')
+    }
     await loadProjectData(selectedProjectId)
+  }
+
+  const startEditDocumentTitle = (doc: ProjectDocument) => {
+    setEditingDocumentId(doc.id)
+    setEditingDocumentTitle(doc.title)
+  }
+
+  const cancelEditDocumentTitle = () => {
+    setEditingDocumentId(null)
+    setEditingDocumentTitle('')
+  }
+
+  const handleSaveDocumentTitle = async (id: string) => {
+    const nextTitle = editingDocumentTitle.trim()
+    if (!nextTitle) {
+      alert('請輸入標題')
+      return
+    }
+
+    setIsSavingDocumentTitle(true)
+    try {
+      const res = await fetch('/api/admin/documents', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, title: nextTitle }),
+      })
+      const { data } = await readJsonSafe(res)
+      if (!res.ok) throw new Error(data.error || '儲存失敗')
+
+      setDocuments((prev) => prev.map((d) => (d.id === id ? { ...d, title: nextTitle } : d)))
+      setEditingDocumentId(null)
+      setEditingDocumentTitle('')
+      setDocumentStatusMsg('標題已更新')
+    } catch (err: any) {
+      alert(err.message || '儲存失敗')
+    } finally {
+      setIsSavingDocumentTitle(false)
+    }
   }
 
   if (authChecking) {
@@ -1355,21 +1402,66 @@ export default function AdminPage() {
                                     />
                                   </a>
                                 )}
-                                <div className="min-w-0">
-                                  <p className="text-sm font-medium text-stone-900 truncate">
-                                    {doc.title}
-                                  </p>
-                                  <p className="text-[11px] text-stone-400 tabular-nums">
-                                    {new Date(doc.created_at).toLocaleDateString('zh-HK')}
-                                  </p>
+                                <div className="min-w-0 flex-1">
+                                  {editingDocumentId === doc.id ? (
+                                    <div className="space-y-2">
+                                      <input
+                                        type="text"
+                                        value={editingDocumentTitle}
+                                        onChange={(e) => setEditingDocumentTitle(e.target.value)}
+                                        className={`${inputClass} py-1.5 text-sm`}
+                                        autoFocus
+                                        disabled={isSavingDocumentTitle}
+                                      />
+                                      <div className="flex flex-wrap gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSaveDocumentTitle(doc.id)}
+                                          disabled={isSavingDocumentTitle}
+                                          className="px-2.5 py-1 bg-teal-800 hover:bg-teal-900 disabled:opacity-60 text-white text-xs font-semibold rounded transition"
+                                        >
+                                          {isSavingDocumentTitle ? '儲存中…' : '儲存'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={cancelEditDocumentTitle}
+                                          disabled={isSavingDocumentTitle}
+                                          className="px-2.5 py-1 bg-white hover:bg-stone-50 text-stone-600 border border-stone-200 text-xs font-medium rounded transition"
+                                        >
+                                          取消
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <p className="text-sm font-medium text-stone-900 truncate">
+                                        {doc.title}
+                                      </p>
+                                      <p className="text-[11px] text-stone-400 tabular-nums">
+                                        {new Date(doc.created_at).toLocaleDateString('zh-HK')}
+                                      </p>
+                                    </>
+                                  )}
                                 </div>
                               </div>
-                              <button
-                                onClick={() => handleDeleteDocument(doc.id)}
-                                className={dangerBtnClass}
-                              >
-                                刪除
-                              </button>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                {editingDocumentId !== doc.id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditDocumentTitle(doc)}
+                                    className="px-2.5 py-1 bg-white hover:bg-stone-50 text-stone-600 border border-stone-200 text-xs font-medium rounded transition"
+                                  >
+                                    改標題
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteDocument(doc.id)}
+                                  className={dangerBtnClass}
+                                >
+                                  刪除
+                                </button>
+                              </div>
                             </div>
                           )
                         })}
